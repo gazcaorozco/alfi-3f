@@ -6,7 +6,7 @@ from mpi4py import MPI
 from alfi.stabilisation import *
 from alfi.transfer import *
 
-from implcfpc.transfer import DGInjection
+from alfi_3f.transfer import DGInjection
 
 import pprint
 import sys
@@ -81,7 +81,7 @@ class NonNewtonianSolver(object):
         self.formulation_TSup = (self.formulation == "T-S-u-p")
         self.formulation_Tup = (self.formulation == "T-u-p")
         self.formulation_has_stress = self.formulation_Sup or self.formulation_LSup or self.formulation_TSup
-        if (formulation_Tup or formulation_TSup): assert not(self.thermal_conv is None), "You have to choose the convection regime (natural or forced)"
+        if (self.formulation_Tup or self.formulation_TSup): assert not(self.thermal_conv is None), "You have to choose the convection regime (natural or forced)"
         def rebalance(dm, i):
             if rebalance_vertices:
                 # if not dm.rebalanceSharedPoints(useInitialGuess=False, parallel=False):
@@ -742,7 +742,7 @@ class NonNewtonianSolver(object):
             "ksp_norm_type": "unpreconditioned",
             "ksp_max_it": self.smoothing,
             "ksp_convergence_test": "skip",
-            "ksp_monitor_true_residual": None,##
+#            "ksp_monitor_true_residual": None,##
             "ksp_divtol": 1.0e10,
             "pc_type": "python",
             "pc_python_type": "firedrake.PatchPC",
@@ -753,7 +753,7 @@ class NonNewtonianSolver(object):
             "patch_pc_patch_symmetrise_sweep": multiplicative,
             "patch_pc_patch_precompute_element_tensors": True,
             "patch_sub_ksp_type": "preonly",
-            "patch_sub_pc_type": "lu"
+            "patch_sub_pc_type": "lu",
         }
         self.configure_patch_solver(mg_levels_solver)
 
@@ -828,7 +828,7 @@ class NonNewtonianSolver(object):
 
         outer_lu = {
             "mat_type": "aij",
-            "ksp_max_it": 1,#2,
+            "ksp_max_it": 1,
             "ksp_convergence_test": "skip",
             "pc_type": "lu",
             "pc_factor_mat_solver_type": "mumps",
@@ -925,7 +925,7 @@ class NonNewtonianSolver(object):
                 tolerances = {
                     "ksp_rtol": 1.0e-9,
                     "ksp_atol": 1.0e-10,
-                    "snes_rtol": 1.0e-10,#9
+                    "snes_rtol": 1.0e-9,#10
                     "snes_atol": 1.0e-8,
                     "snes_stol": 1.0e-6,
                 }
@@ -988,7 +988,6 @@ class NonNewtonianSolver(object):
         if self.mesh.comm.rank == 0:
             warning(msg)
 
-
     def setup_adjoint(self, J):
         F = self.F
         self.z_adj = self.z.copy(deepcopy=True)
@@ -1003,7 +1002,6 @@ class NonNewtonianSolver(object):
                                             options_prefix="ns_adj",
                                             appctx=self.appctx)
 
-#        solver.set_transfer_operators(*self.transfers)
         solver.set_transfer_manager(self.transfermanager)
         self.solver_adjoint = solver
 
@@ -1026,11 +1024,13 @@ class NonNewtonianSolver(object):
             max_owned_dofs/mean_owned_dofs, max_owned_dofs/min_owned_dofs
         )))
 
-class ConformingSolver(NonNewtonianSolver)
+class ConformingSolver(NonNewtonianSolver):
 
     def residual(self):
 
         ###Define functions and test functions
+        z = self.z
+        Z = self.Z
         if self.formulation_Sup:
             (S_,u, p) = split(z)
             (ST_,v, q) = split(TestFunction(Z))
@@ -1060,9 +1060,9 @@ class ConformingSolver(NonNewtonianSolver)
         D = sym(grad(u))
 
         if self.formulation_Sup:
-            G = self.problem(S,D)
+            G = self.problem.const_rel(S,D)
         elif self.formulation_TSup:
-            G = self.problem(S,D,theta)
+            G = self.problem.const_rel(S,D,theta)
         elif self.formulation_up:
             G = self.problem.const_rel(D)
         elif self.formulation_Tup:
@@ -1081,22 +1081,25 @@ class ConformingSolver(NonNewtonianSolver)
             - self.advect * inner(outer(u,u), sym(grad(v)))*dx
             - p * div(v) * dx
             - div(u) * q * dx
+            + inner(S,sym(grad(v)))*dx
+            - inner(G,ST) * dx
         )
+        F = (self.gamma*inner(div(u),div(v))*dx + inner(S,grad(v))*dx - inner(p,div(v))*dx - div(u)*q*dx + inner(G,ST)*dx)
 
-        if self.formulation_Sup:
+        #if self.formulation_Sup:
+#        F += (
+#            + inner(S,sym(grad(v)))*dx
+#            - inner(G,ST) * dx
+#            )
+
+        if self.formulation_LSup:
             F += (
-                inner(S,sym(grad(v)))*dx
-                - inner(G,ST) * dx
-                )
-
-        elif self.formulation_LSup:
-            F = (
                 inner(S,sym(grad(v)))*dx
                 - inner(D - L, SL) * dx
                 - inner(G, ST) * dx
                 )
         elif self.formulation_up:
-            F = (
+            F += (
                 inner(G,sym(grad(v)))*dx
                 )
         elif self.formulation_Tup or self.formulation_TSup:
@@ -1198,6 +1201,7 @@ class ConformingSolver(NonNewtonianSolver)
                         - (self.Br/self.Pe) * inner(inner(S,sym(grad(u))), theta_) * dx
                         )
 
+#        F = (inner(S,grad(v))*dx - inner(p,div(v))*dx - div(u)*q*dx + inner(G,ST)*dx)
         return F
 
 #class HdivSolver(NonNewtonianSolver):
