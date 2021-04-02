@@ -1,6 +1,6 @@
 #python bingham_Sup_poiseuille.py --solver-type almg --discretisation sv --mh bary --patch macro  --smoothing 5 --cycles 2 --nref 1 --k 2 --high-accuracy
 from firedrake import *
-from implcfpc import *
+from alfi_3f import *
 import numpy as np
 
 class Bingham_Poiseuille_Sup(NonNewtonianProblem_Sup):
@@ -24,7 +24,7 @@ class Bingham_Poiseuille_Sup(NonNewtonianProblem_Sup):
 
     def has_nullspace(self): return True #return True
 
-    def const_rel(self,S, D):    
+    def const_rel(self,S, D):
         #Implicit
         G = 2.*nu*(self.tau + 2.*self.nu*sqrt(self.eps**2 + inner(D,D)))*D - sqrt(self.eps**2 + 2.*self.nu*inner(D,D))*S#Does it really need eps in the first term? It seems like it...
 #        G = 2.*nu*(self.tau + 2.*self.nu*sqrt(inner(D,D)))*D - sqrt(self.eps**2 + 2.*self.nu*inner(D,D))*S
@@ -33,15 +33,6 @@ class Bingham_Poiseuille_Sup(NonNewtonianProblem_Sup):
         #Bercovier-Engelman
 #        G = (2.*self.nu + self.tau/sqrt(self.eps**2 + inner(D,D)))*D - S
         return G
-
-    def const_rel_picard(self,S, D, S0, D0):    
-        #Implicit
-        G0 = 2.*nu*(self.tau + 2.*self.nu*sqrt(self.eps**2 + inner(D,D)))*D0 - sqrt(self.eps**2 + 2.*self.nu*inner(D,D))*S0
-        #Papanastasiou
-#        G0 = (((self.tau/sqrt(inner(D,D)))*(1-exp(-(1./self.eps)*sqrt(inner(D,D))))) + 2.*self.nu)*D0 - S0
-        #Bercovier-Engelman
-#        G0 = (2.*self.nu + self.tau/sqrt(self.eps**2 + inner(D,D)))*D0 - S0
-        return G0
 
     def exact_velocity(self, domain, tau_obj, C):
         (x, y) = SpatialCoordinate(domain)
@@ -64,9 +55,9 @@ if __name__ == "__main__":
 
     #Choose Pressure Drop
     C = 2.
-    
-    #Set up lists of errors and values of eps                           # with (3,3) and (3,2) the Newton solver doesn't converge
-    k_nrefs = [(2,1),(2,2),(2,3),(3,1),(3,3)]#,(3,2)]#,(2,4)]#,(3,2),(3,3)]#,(3,2)]   #(2,4) fails in the first one (but allu works...)
+
+    #Set up lists of errors and values of eps
+    k_nrefs = [(2,1),(2,2),(2,3),(3,1),(3,3)]
     epss = {}
     vel_errors = {}
     vel_profiles = {}
@@ -81,7 +72,6 @@ if __name__ == "__main__":
     zeps_list[3] = [50,100]
     zeps_list[4] = [250,500,600] + list(range(650, 1000+50, 50))
     zeps_list[5] = list(range(1050, 10000+50, 50))
-#    zeps_list[5] = list(range(1030, 10000+30, 30))#Bercovier-Engelman
     eps_list = {}
     for j in [0,1,2,3,4,5]:
         eps_list[j] = [1./z_ for z_ in zeps_list[j]]
@@ -91,7 +81,7 @@ if __name__ == "__main__":
     for pars in k_nrefs:
         epss[pars] = np.asarray([eps_list[i][-1] for i in range(6)])
 #
-#    zeps = [10,50,100,250,500,600]  + list(range(650, 10000+50,50)) 
+#    zeps = [10,50,100,250,500,600]  + list(range(650, 10000+50,50))
 #    epss_0 = [1.,1/5.]
 #    epss = [1./z_ for z_ in zeps]
 #    eps = Constant(epss_0[0])
@@ -127,10 +117,10 @@ if __name__ == "__main__":
             np.savetxt('output/vel_profile_k_2_nref_1_eps_%f_rest.out'%(epss[params][0]),(y_slice,np.asarray(vel_profiles[epss[params][0]])))
 
         for i in range(1,6):
-            continuation_params[i] = {"eps": eps_list[i]}#"nu": [nus[-1]],"tau": [taus[-1]], 
+            continuation_params[i] = {"eps": eps_list[i]}#"nu": [nus[-1]],"tau": [taus[-1]],
             if i == 1:
                 results[i] = run_solver(solver_Sup, args, continuation_params[i])
-            else:            
+            else:
                 results[i] = run_solver(solver_Sup, args, continuation_params[i], {"eps": "secant"})
             (S_,u,p) = solver_Sup.z.split()
             vel_errors[params].append(norm(u - problem_Sup.exact_velocity(solver_Sup.Z.ufl_domain(), taus[-1], C)))

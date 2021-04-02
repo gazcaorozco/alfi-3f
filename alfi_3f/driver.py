@@ -31,6 +31,8 @@ def get_default_parser():
                         choices=["none", "burman", "gls", "supg"]) #"supg-temp"
     parser.add_argument("--linearisation", type=str, default="newton",
                         choices=["newton", "picard", "kacanov"]) #kacanov=full Picard #TODO: "regularised"
+    parser.add_argument("--thermal-conv", type=str, default="none",
+                        choices=["none", "natural_Ra", "natural_Ra2", "natural_Gr", "forced"])
     parser.add_argument("--discretisation", type=str, required=True,
                         choices=["sv","th","p1p1","p1p0"]) #Want: hdiv-ldg
     parser.add_argument("--gamma", type=float, default=1e4)
@@ -171,6 +173,7 @@ def get_solver(args, problem, hierarchy_callback=None):
         stabilisation_weight=args.stabilisation_weight,
         hierarchy=args.mh,
         patch_composition=args.patch_composition,
+        thermal_conv=args.thermal_conv,
         restriction=args.restriction,
         smoothing=args.smoothing,
         cycles=args.cycles,

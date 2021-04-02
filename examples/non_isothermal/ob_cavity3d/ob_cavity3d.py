@@ -1,8 +1,8 @@
-#python temp_viscosity_ob_cavity3d.py --baseN 4 --discretisation sv --mh bary --patch macro --restriction --gamma 10000 --temp-bcs left-right --stabilisation-weight 5e-3 --stabilisation-type none --solver-type almg --non-dimensional rayleigh1 --fields Tup  --temp-dependent none --k 3 --nref 1 --cycles 2 --smoothing 4  
+#python temp_viscosity_ob_cavity3d.py --baseN 4 --discretisation sv --mh bary --patch macro --restriction --gamma 10000 --temp-bcs left-right --stabilisation-weight 5e-3 --stabilisation-type none --solver-type almg --non-dimensional rayleigh1 --fields Tup  --temp-dependent none --k 3 --nref 1 --cycles 2 --smoothing 4
 from firedrake import *
-from implcfpc import *
+from alfi_3f import *
 
-class TempViscosityOBCavity_up(GeneralisedBoussinesqProblem_up):
+class TempViscosityOBCavity_up(NonIsothermalProblem_up):
     def __init__(self, baseN, temp_bcs="left-right", temp_dependent="viscosity", non_dimensional="rayleigh1", **params):
         super().__init__(non_dimensional=non_dimensional, **params)
         self.baseN = baseN
@@ -18,27 +18,27 @@ class TempViscosityOBCavity_up(GeneralisedBoussinesqProblem_up):
         if self.temp_bcs == "down-up":
             bcs = [DirichletBC(Z.sub(1), Constant((0., 0., 0.)), [1, 2, 3, 4, 5, 6]),
                    DirichletBC(Z.sub(0), Constant(1.0), (5,)),               #Hot (bottom) - Cold (top)
-                   DirichletBC(Z.sub(0), Constant(0.0), (6,)), 
+                   DirichletBC(Z.sub(0), Constant(0.0), (6,)),
                 ]
         else:
             bcs = [DirichletBC(Z.sub(1), Constant((0., 0., 0.)), [1, 2, 3, 4, 5, 6]),
                    DirichletBC(Z.sub(0), Constant(1.0), (3,)),               #Hot (left) - Cold (right)
-                   DirichletBC(Z.sub(0), Constant(0.0), (4,)), 
+                   DirichletBC(Z.sub(0), Constant(0.0), (4,)),
                 ]
         return bcs
 
     def has_nullspace(self): return True
 
-    def const_rel(self, D, theta):    
+    def const_rel(self, D, theta):
         nr = (self.r - 2.)/2.
         K = self.viscosity(theta)
-        S = K*pow(inner(D,D),nr)*D 
+        S = K*pow(inner(D,D),nr)*D
         return S
 
     def const_rel_picard(self,D,D0,theta):
         nr = (self.r - 2.)/2.
         K = self.viscosity(theta)
-        S0 = K*pow(inner(D,D),nr)*D0 
+        S0 = K*pow(inner(D,D),nr)*D0
         return S0
 
     def const_rel_temperature(self, theta, gradtheta):
@@ -60,13 +60,13 @@ class TempViscosityOBCavity_up(GeneralisedBoussinesqProblem_up):
         else:
             kappa = Constant(1.)
         return kappa
-        
+
     def interpolate_initial_guess(self, w):
         (x,y,z) = SpatialCoordinate(w.ufl_domain())
         w_expr = as_vector([z,x + 5, 3.*y])
         w.sub(1).interpolate(w_expr)
 
-class TempViscosityOBCavity_Sup(GeneralisedBoussinesqProblem_Sup):
+class TempViscosityOBCavity_Sup(NonIsothermalProblem_Sup):
     def __init__(self, baseN, temp_bcs="left-right",temp_dependent="viscosity", non_dimensional="rayleigh1", **params):
         super().__init__(non_dimensional=non_dimensional,**params)
         self.baseN = baseN
@@ -82,22 +82,22 @@ class TempViscosityOBCavity_Sup(GeneralisedBoussinesqProblem_Sup):
         if self.temp_bcs == "down-up":
             bcs = [DirichletBC(Z.sub(2), Constant((0., 0., 0.)), [1, 2, 3, 4, 5, 6]),
                    DirichletBC(Z.sub(0), Constant(1.0), (5,)),               #Hot (bottom) - Cold (top)
-                   DirichletBC(Z.sub(0), Constant(0.0), (6,)), 
+                   DirichletBC(Z.sub(0), Constant(0.0), (6,)),
                 ]
         else:
             bcs = [DirichletBC(Z.sub(2), Constant((0., 0., 0.)), [1, 2, 3, 4, 5, 6]),
                    DirichletBC(Z.sub(0), Constant(1.0), (3,)),               #Hot (left) - Cold (right)
-                   DirichletBC(Z.sub(0), Constant(0.0), (4,)), 
+                   DirichletBC(Z.sub(0), Constant(0.0), (4,)),
                 ]
         return bcs
 
     def has_nullspace(self): return True
 
-    def const_rel(self, S, D, theta):    
+    def const_rel(self, S, D, theta):
         nr = (self.r - 2.)/2.
 #        nr2 = (2. - self.r)/(2.*(self.r - 1.))
         K = self.viscosity(theta)
-        G = S - K*pow(inner(D,D),nr)*D 
+        G = S - K*pow(inner(D,D),nr)*D
 #        G = D - (1./(2.*self.nu))*pow(inner(S/(2.*self.nu),S/(2.*self.nu)),nr2)*S
         return G
 
@@ -105,7 +105,7 @@ class TempViscosityOBCavity_Sup(GeneralisedBoussinesqProblem_Sup):
         nr = (self.r - 2.)/2.
 #        nr2 = (2. - self.r)/(2.*(self.r - 1.))
         K = self.viscosity(theta)
-        G0 = S0 - K*pow(inner(D,D),nr)*D0 
+        G0 = S0 - K*pow(inner(D,D),nr)*D0
 #        G0 = D0 - (1./(2.*self.nu))*pow(inner(S/(2.*self.nu),S/(2.*self.nu)),nr2)*S0
         return G0
 
@@ -128,7 +128,7 @@ class TempViscosityOBCavity_Sup(GeneralisedBoussinesqProblem_Sup):
         else:
             kappa = Constant(1.)
         return kappa
-        
+
     def interpolate_initial_guess(self, w):
         (x,y,z) = SpatialCoordinate(w.ufl_domain())
         w_expr = as_vector([z,x + 5, 3.*y])
@@ -149,12 +149,12 @@ if __name__ == "__main__":
                         action="store_true")
     args, _ = parser.parse_known_args()
 
-    #Prandtl number 
+    #Prandtl number
     Pr_s = [2.,6.8]
     Pr_s = [1.,0.5,0.1,0.01]
     Pr_s = [1.]
     Pr = Constant(Pr_s[0])
-    
+
     if args.non_dimensional in ["rayleigh1", "rayleigh2"]:
         #Rayleigh number
         Ra_s = [2500] + list(range(5000,500000 + 5000,5000))    #Meant for left-right, constant parameters

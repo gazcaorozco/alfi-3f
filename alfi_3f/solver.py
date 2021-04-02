@@ -122,12 +122,12 @@ class NonNewtonianSolver(object):
             if not isinstance(getattr(self,param_str), Constant):
                 setattr(self, param_str, Constant(getattr(self, param_str)))
             self.const_rel_params[param_str] = getattr(self, param_str)
-        #Make sure either nu or Re are defined #FIXME: Add the non-isothermal case
-#        if (self.problem.formulation in ["OB_Temp-u-p","OB_Temp-S-u-p","GeneralOB_Temp-u-p","GeneralOB_Temp-S-u-p"]):
-#            self.Re = sqrt(self.Gr) if self.problem.non_dimensional == "grashof" else self.Ra
-#            self.nu = 1./self.Re
-#        else:
-        assert any(elem in list(self.problem.const_rel_params.keys()) for elem in ["nu","Re"]), "The constitutive relation must include either the Reynolds Re number or visosity nu"
+        #Make sure either nu or Re are defined
+        if self.thermal_conv in ["natural_Ra", "natural_Ra2", "natural_Gr"]:
+            self.Re = sqrt(self.Gr) if self.thermal_conv == "natural_Gr" else self.Ra
+            self.nu = 1./self.Re
+        else:
+            assert any(elem in list(self.problem.const_rel_params.keys()) for elem in ["nu","Re"]), "The constitutive relation must include either the Reynolds Re number or visosity nu"
         if not("nu" in list(self.problem.const_rel_params.keys())):
             self.nu = 1./self.Re
         if not("Re" in list(self.problem.const_rel_params.keys())):
