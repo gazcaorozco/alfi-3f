@@ -32,7 +32,7 @@ def get_default_parser():
     parser.add_argument("--linearisation", type=str, default="newton",
                         choices=["newton", "picard", "kacanov"]) #kacanov=full Picard #TODO: "regularised"
     parser.add_argument("--discretisation", type=str, required=True,
-                        choices=["sv","th","p1p1"]) #Want: p1p0, hdiv-ldg
+                        choices=["sv","th","p1p1","p1p0"]) #Want: hdiv-ldg
     parser.add_argument("--gamma", type=float, default=1e4)
     parser.add_argument("--clear", dest="clear", default=False,
                         action="store_true")
@@ -60,44 +60,45 @@ def get_default_parser():
     parser.add_argument("--cycles", type=int, default=None)
     return parser
 
-def visualisation(solver, file_, time):  #FIXME: What happens for other formulations?
-    if solver.formulation_Sup:
-        (S_,u,p) = solver.z.split()
-        k = solver.z.sub(1).ufl_element().degree()
-    elif solver.formulation_up:
-        (u,p) = solver.z.split()
-        k = solver.z.sub(0).ufl_element().degree()
-        S = solver.problem.const_rel(sym(grad(u)))
-    elif solver.formulation_TSup:
-        (theta,S_,u,p) = solver.z.split()
-        k = solver.z.sub(2).ufl_element().degree()
-    elif solver.formulation_Tup:
-        (theta,u,p) = solver.z.split()
-        k = solver.z.sub(1).ufl_element().degree()
-        S = solver.problem.const_rel(sym(grad(u)))
-
-    if solver.formulation_Sup or solver.formulation_LSup or solver.formulation_TSup:
-        if solver.tdim == 2:
-            (S_1,S_2) = split(S_)
-            S = as_tensor(((S_1,S_2),(S_2,-S_1)))
-        else:
-            (S_1,S_2,S_3,S_4,S_5) = split(S_)
-            S = as_tensor(((S_1,S_2,S_3),(S_2,S_5,S_4),(S_3,S_4,-S_1-S_5)))
-    if solver.formulation_LSup:
-        if solver.tdim == 2:
-            (D_1,D_2) = split(D_)
-            D = as_tensor(((D_1,D_2),(D_2,-D_1)))
-        else:
-            (D_1,D_2,D_3,D_4,D_5) = split(D_)
-            D = as_tensor(((D_1,D_2,D_3),(D_2,D_5,D_4),(D_3,D_4,-D_1-D_5)))
-    else:
-        D = sym(grad(u))
-
-    SS = project(S,TensorFunctionSpace(solver.z.ufl_domain(),"DG",k-1))
-    DD = project(D,TensorFunctionSpace(solver.z.ufl_domain(),"DG",k-1))
-    u.rename("Velocity")
-    p.rename("Pressure")
-    SS.rename("Stress")
+def visualisation(solver, file_, time):  #FIXME: What should we do here?
+    raise NotImplementedError
+#    if solver.formulation_Sup:
+#        (S_,u,p) = solver.z.split()
+#        k = solver.z.sub(1).ufl_element().degree()
+#    elif solver.formulation_up:
+#        (u,p) = solver.z.split()
+#        k = solver.z.sub(0).ufl_element().degree()
+#        S = solver.problem.const_rel(sym(grad(u)))
+#    elif solver.formulation_TSup:
+#        (theta,S_,u,p) = solver.z.split()
+#        k = solver.z.sub(2).ufl_element().degree()
+#    elif solver.formulation_Tup:
+#        (theta,u,p) = solver.z.split()
+#        k = solver.z.sub(1).ufl_element().degree()
+#        S = solver.problem.const_rel(sym(grad(u)))
+#
+#    if solver.formulation_Sup or solver.formulation_LSup or solver.formulation_TSup:
+#        if solver.tdim == 2:
+#            (S_1,S_2) = split(S_)
+#            S = as_tensor(((S_1,S_2),(S_2,-S_1)))
+#        else:
+#            (S_1,S_2,S_3,S_4,S_5) = split(S_)
+#            S = as_tensor(((S_1,S_2,S_3),(S_2,S_5,S_4),(S_3,S_4,-S_1-S_5)))
+#    if solver.formulation_LSup:
+#        if solver.tdim == 2:
+#            (D_1,D_2) = split(D_)
+#            D = as_tensor(((D_1,D_2),(D_2,-D_1)))
+#        else:
+#            (D_1,D_2,D_3,D_4,D_5) = split(D_)
+#            D = as_tensor(((D_1,D_2,D_3),(D_2,D_5,D_4),(D_3,D_4,-D_1-D_5)))
+#    else:
+#        D = sym(grad(u))
+#
+#    SS = project(S,TensorFunctionSpace(solver.z.ufl_domain(),"DG",k-1))
+#    DD = project(D,TensorFunctionSpace(solver.z.ufl_domain(),"DG",k-1))
+#    u.rename("Velocity")
+#    p.rename("Pressure")
+#    SS.rename("Stress")
 #    file_.write(solver.visprolong(u),solver.visprolong(theta),time=time)  #Try just velocity for now
 #    file_.write(solver.visprolong(u),solver.visprolong(p),solver.visprolong(SS),solver.visprolong(DD),time=time)
 
@@ -153,7 +154,8 @@ def visualisation(solver, file_, time):  #FIXME: What happens for other formulat
 def get_solver(args, problem, hierarchy_callback=None):
     solver_t = {"sv": ScottVogeliusSolver,
                 "th": TaylorHoodSolver,
-                "p1p1": P1P1Solver}[args.discretisation]
+                "p1p1": P1P1Solver,
+                "p1p0": P1P0Solver}[args.discretisation]
 
     solver = solver_t(
         problem,

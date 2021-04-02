@@ -192,56 +192,12 @@ class NonNewtonianSolver(object):
             else:
                 Vdim = self.Z.sub(self.velocity_id).dim()
                 print("Number of velocity degrees of freedom: %s (avg %.2f per core)" % (Vdim, Vdim / size))
-#        if self.formulation_Sup: #FIXME Don't do this here
-#            z.split()[0].rename("Stress")
-#            z.split()[1].rename("Velocity")
-#            z.split()[2].rename("Pressure")
-#        elif self.formulation_LSup:
-#            z.split()[0].rename("Symmetric Velocity Gradient")
-#            z.split()[1].rename("Stress")
-#            z.split()[2].rename("Velocity")
-#            z.split()[3].rename("Pressure")
-#        elif self.formulation_up:
-#            z.split()[0].rename("Velocity")
-#            z.split()[1].rename("Pressure")
-#        elif self.formulation_TSup:
-#            z.split()[0].rename("Temperature")
-#            z.split()[1].rename("Stress")
-#            z.split()[2].rename("Velocity")
-#            z.split()[3].rename("Pressure")
-#        elif self.formulation_Tup:
-#            z.split()[0].rename("Temperature")
-#            z.split()[1].rename("Velocity")
-#            z.split()[2].rename("Pressure")
         self.z = z
 
-        ###Define functions and test functions
-        if self.formulation_Sup:
-            (S_,u, p) = split(z)
-            (ST_,v, q) = split(TestFunction(Z))
-        elif self.formulation_LSup:
-            (L_,S_,u, p) = split(z)
-            (LT_,ST_,v, q) = split(TestFunction(Z))
-            L = self.stress_to_matrix(L_)
-            LT = self.stress_to_matrix(LT_)
-        elif self.formulation_Lup:
-            (L_,u, p) = split(z)
-            (LT_,v, q) = split(TestFunction(Z))
-            L = self.stress_to_matrix(L_)
-            LT = self.stress_to_matrix(LT_)
-        elif self.formulation_up:
-            (u, p) = split(z)
-            (v, q) = split(TestFunction(Z))
-        elif self.formulation_TSup:
-            (theta,S_,u, p) = split(z)
-            (theta_,ST_,v, q) = split(TestFunction(Z))
-        elif self.formulation_Tup:
-            (theta,u, p) = split(z)
-            (theta_,v, q) = split(TestFunction(Z))
-        #Split stress variables appropriately
-        if self.formulation_has_stress:
-            S = self.stress_to_matrix(S_)
-            ST = self.stress_to_matrix(ST_)
+        #Split and define velocity u and test function v
+        fields = self.split_variables()
+        u = fields["u"]
+        v = fields["v"]
 
 #        #For the Picard Jacobian #TODO: Should this be here?
 #        w = TrialFunction(self.Z)
@@ -608,6 +564,53 @@ class NonNewtonianSolver(object):
             self.J = derivative(self.F, self.z)
         elif self.linearisation in ["picard", "kacanov"]:
             raise NotImplementedError("Need to implement picard...")
+
+    def split_variables(self):
+        z = self.z
+        Z = self.Z
+        fields = {}
+        if self.formulation_Sup:
+            (S_,u, p) = split(z)
+            (ST_,v, q) = split(TestFunction(Z))
+        elif self.formulation_LSup:
+            (L_,S_,u, p) = split(z)
+            (LT_,ST_,v, q) = split(TestFunction(Z))
+            L = self.stress_to_matrix(L_)
+            LT = self.stress_to_matrix(LT_)
+            fields["L"] = L
+            fields["LT"] = LT
+        elif self.formulation_Lup:
+            (L_,u, p) = split(z)
+            (LT_,v, q) = split(TestFunction(Z))
+            L = self.stress_to_matrix(L_)
+            LT = self.stress_to_matrix(LT_)
+            fields["L"] = L
+            fields["LT"] = LT
+        elif self.formulation_up:
+            (u, p) = split(z)
+            (v, q) = split(TestFunction(Z))
+        elif self.formulation_TSup:
+            (theta,S_,u, p) = split(z)
+            (theta_,ST_,v, q) = split(TestFunction(Z))
+            fields["theta"] = theta
+            fields["theta_"] = theta_
+        elif self.formulation_Tup:
+            (theta,u, p) = split(z)
+            (theta_,v, q) = split(TestFunction(Z))
+            fields["theta"] = theta
+            fields["theta_"] = theta_
+        fields["u"] = u
+        fields["v"] = v
+        fields["p"] = p
+        fields["q"] = q
+
+        #Split stress variables appropriately
+        if self.formulation_has_stress:
+            S = self.stress_to_matrix(S_)
+            ST = self.stress_to_matrix(ST_)
+            fields["S"] = S
+            fields["ST"] = ST
+        return fields
 
     def stress_to_matrix(self, S_):
         if self.tdim == 2:
@@ -1028,37 +1031,21 @@ class ConformingSolver(NonNewtonianSolver):
 
     def residual(self):
 
-        ###Define functions and test functions
-        z = self.z
-        Z = self.Z
-        if self.formulation_Sup:
-            (S_,u, p) = split(z)
-            (ST_,v, q) = split(TestFunction(Z))
-        elif self.formulation_LSup:
-            (L_,S_,u, p) = split(z)
-            (LT_,ST_,v, q) = split(TestFunction(Z))
-            L = self.stress_to_matrix(L_)
-            LT = self.stress_to_matrix(LT_)
-        elif self.formulation_Lup:
-            (L_,u, p) = split(z)
-            (LT_,v, q) = split(TestFunction(Z))
-            L = self.stress_to_matrix(L_)
-            LT = self.stress_to_matrix(LT_)
-        elif self.formulation_up:
-            (u, p) = split(z)
-            (v, q) = split(TestFunction(Z))
-        elif self.formulation_TSup:
-            (theta,S_,u, p) = split(z)
-            (theta_,ST_,v, q) = split(TestFunction(Z))
-        elif self.formulation_Tup:
-            (theta,u, p) = split(z)
-            (theta_,v, q) = split(TestFunction(Z))
-        #Split stress variables appropriately
-        if self.formulation_has_stress:
-            S = self.stress_to_matrix(S_)
-            ST = self.stress_to_matrix(ST_)
+        #Define functions and test functions
+        fields = self.split_variables()
+        u = fields["u"]
+        v = fields["v"]
+        p = fields["p"]
+        q = fields["q"]
+        S = fields.get("S")
+        ST = fields.get("ST")
+        L = fields.get("L")
+        LT = fields.get("LT")
+        theta = fields.get("theta")
+        theta_ = fields.get("theta_")
         D = sym(grad(u))
 
+        #For the constitutive relation
         if self.formulation_Sup:
             G = self.problem.const_rel(S,D)
         elif self.formulation_TSup:
@@ -1342,8 +1329,13 @@ class P1P1Solver(TaylorHoodSolver):
     def residual(self):
 
         F = super().residual()
+        #Define functions and test functions
+        fields = self.split_variables()
+        u = fields["u"]
+        p = fields["p"]
+        q = fields["q"]
 
-        #Stabilisation  #TODO: We could do this from the stabilisation options above...
+        #Stabilisation  #TODO: If gls stabilisation is used then we shouldn't add anything...
         h = CellDiameter(self.mesh)
         beta = Constant(0.2)
         delta = beta*h*h
@@ -1407,6 +1399,10 @@ class P1P0Solver(ScottVogeliusSolver):
     def residual(self):
 
         F = super().residual()
+        #Define functions and test functions
+        fields = self.split_variables()
+        p = fields["p"]
+        q = fields["q"]
 
         #Stabilisation
         h = CellDiameter(self.mesh)
