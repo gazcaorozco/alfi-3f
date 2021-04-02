@@ -1,6 +1,6 @@
 #mpirun -n 12 python3 --k 3 --baseN 4 --solver-type almg --discretisation sv --mh bary --stabilisation-type burman --patch macro --smoothing 6 --cycles 1 --restriction --stabilisation-weight 5e-3 2>&1
 from firedrake import *
-from implcfpc import *
+from alfi_3f import *
 
 class ImplicitCarreau_ldc3D(NonNewtonianProblem_Sup):
     def __init__(self,baseN,r,nu,eps,tau,r2,nu2,eps2,tau2):
@@ -19,7 +19,7 @@ class ImplicitCarreau_ldc3D(NonNewtonianProblem_Sup):
 
     def has_nullspace(self): return True
 
-    def const_rel(self,S, D):    
+    def const_rel(self,S, D):
         nn = (2.- self.r)/(2.*(self.r-1.))
         nn2 = (self.r2-2)/(2.)
         visc_diff = (1./(2.*self.nu))*(1. - self.tau)
@@ -28,7 +28,7 @@ class ImplicitCarreau_ldc3D(NonNewtonianProblem_Sup):
         G = D - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S
         return G
 
-    def const_rel_picard(self,S, D, S0, D0):    
+    def const_rel_picard(self,S, D, S0, D0):
         nn = (2.- self.r)/(2.*(self.r-1.))
         nn2 = (self.r2-2)/(2.)
         visc_diff = (1./(2.*self.nu))*(1. - self.tau)
@@ -69,7 +69,7 @@ if __name__ == "__main__":
 #    taus2 = [0.95] #Mild
     tau2 = Constant(taus2[-1])
 
-    #eps2    
+    #eps2
     epss2 = [1.,0.5,0.1,0.05,0.01,0.008,0.005]
  #   epss2 = [1.]
     epss2 = [0.005] #Already mild
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     taus = [0.9] #Already mild
     tau = Constant(taus[-1])
 
-    #eps    
+    #eps
     epss = [1.,0.5,0.1,0.05,0.01,0.008,0.005]
 #    epss = [1.]
     epss = [0.005]# Already Mild

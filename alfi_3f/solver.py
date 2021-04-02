@@ -791,7 +791,7 @@ class NonNewtonianSolver(object):
             "ksp_max_it": self.cycles,
             "ksp_norm_type": "unpreconditioned",
             "ksp_convergence_test": "skip",
-            "ksp_monitor_true_residual": None,##
+#            "ksp_monitor_true_residual": None,##
             "pc_type": "mg",
             "pc_mg_type": "full",
             "pc_mg_log": None,
@@ -1081,16 +1081,13 @@ class ConformingSolver(NonNewtonianSolver):
             - self.advect * inner(outer(u,u), sym(grad(v)))*dx
             - p * div(v) * dx
             - div(u) * q * dx
-            + inner(S,sym(grad(v)))*dx
-            - inner(G,ST) * dx
         )
-        F = (self.gamma*inner(div(u),div(v))*dx + inner(S,grad(v))*dx - inner(p,div(v))*dx - div(u)*q*dx + inner(G,ST)*dx)
 
-        #if self.formulation_Sup:
-#        F += (
-#            + inner(S,sym(grad(v)))*dx
-#            - inner(G,ST) * dx
-#            )
+        if self.formulation_Sup:
+            F += (
+                + inner(S,sym(grad(v)))*dx
+                - inner(G,ST) * dx
+                )
 
         if self.formulation_LSup:
             F += (
@@ -1322,7 +1319,7 @@ class P1P1Solver(TaylorHoodSolver):
 
     def function_space(self, mesh, k):
         assert k in [1], "P1P1 is only meant for k=1"
-        assert self.solver_type == "lu-p1", "P1P1 only makes sense with LU (for now)"
+#        assert self.solver_type == "lu-p1", "P1P1 only makes sense with LU (for now)"
         eleth = FiniteElement("CG", mesh.ufl_cell(), k)
         if self.tdim == 2:
             eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=3)
@@ -1350,7 +1347,7 @@ class P1P1Solver(TaylorHoodSolver):
         h = CellDiameter(self.mesh)
         beta = Constant(0.2)
         delta = beta*h*h
-        F += - delta * inner(grad(p), grad(q)) * dx
+        F += - delta * inner(self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
 
         rhs = self.problem.rhs(self.Z)
         if rhs is not None:
