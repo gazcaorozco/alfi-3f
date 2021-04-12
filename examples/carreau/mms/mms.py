@@ -18,47 +18,47 @@ parser.add_argument("--fields", type=str, default="Sup",
                         choices=["Sup", "up"])
 args, _ = parser.parse_known_args()
 
-##Constitutive parameters (to study variations in r)
-#nu_s = [0.5]
-#nu = Constant(nu_s[0])
-#epss = [1e-4]
-#eps = Constant(epss[0])
-#r_s = []   ##The errors will be computed for the last element in each list
-###Shear-thickenning
-##r_s1 = [2.0]; r_s.append(r_s1)
-##r_s2 = [2.7]; r_s.append(r_s2)
-##r_s3 = [3.5]; r_s.append(r_s3)
+#Constitutive parameters (to study variations in r)
+nu_s = [0.5]
+nu = Constant(nu_s[0])
+epss = [1e-4]
+eps = Constant(epss[0])
+r_s = []   ##The errors will be computed for the last element in each list
+#Shear-thickenning
+r_s1 = [2.0]; r_s.append(r_s1)
+r_s2 = [2.7]; r_s.append(r_s2)
+r_s3 = [3.5]; r_s.append(r_s3)
 ##Shear-thinning
 #r_s1 = [2.0]; r_s.append(r_s1)
 #r_s2 = [1.8]; r_s.append(r_s2)
 #r_s3 = [1.6]; r_s.append(r_s3)
-#r = Constant(r_s[0][0])
-#
-#const_params_list = [{"nu": nu_s, "eps": epss, "r": r_s[0]}]
-#for rr in r_s[1:]:
-#    const_params_list.append({"nu": [nu_s[-1]], "eps": [epss[-1]], "r": rr})
-#params_to_check = {"r": [a[-1] for a in r_s]}
-#print("params_to_check: ", params_to_check)
+r = Constant(r_s[0][0])
 
-#Constitutive parameters (to study variations in nu)
-epss = [1e-4]
-eps = Constant(epss[0])
-#Power-law exponent
-r_s = [2.0] #1.8,2.5
-r = Constant(r_s[0])
-#Viscosities
-nu_s = []
-Res1 = [1]; nu_s1 = [1./re for re in Res1]; nu_s.append(nu_s1)
-Res2 = [9, 10]; nu_s2 = [1./re for re in Res2]; nu_s.append(nu_s2)
-Res3 = [50, 90, 100]; nu_s3 = [1./re for re in Res3]; nu_s.append(nu_s3)
-Res4 = [400, 500, 900, 1000]; nu_s4 = [1./re for re in Res4]; nu_s.append(nu_s4)
-nu = Constant(nu_s[0][0])
-
-const_params_list = [{"eps": epss, "r": r_s, "nu": nu_s[0]}]
-for nu_ in nu_s[1:]:
-    const_params_list.append({"eps": [epss[-1]], "r": [r_s[-1]], "nu": nu_})
-params_to_check = {"nu": [a[-1] for a in nu_s]}
+const_params_list = [{"nu": nu_s, "eps": epss, "r": r_s[0]}]
+for rr in r_s[1:]:
+    const_params_list.append({"nu": [nu_s[-1]], "eps": [epss[-1]], "r": rr})
+params_to_check = {"r": [a[-1] for a in r_s]}
 print("params_to_check: ", params_to_check)
+
+##Constitutive parameters (to study variations in nu)
+#epss = [1e-4]
+#eps = Constant(epss[0])
+##Power-law exponent
+#r_s = [2.0] #1.8,2.5
+#r = Constant(r_s[0])
+##Viscosities
+#nu_s = []
+#Res1 = [1]; nu_s1 = [1./re for re in Res1]; nu_s.append(nu_s1)
+#Res2 = [9, 10]; nu_s2 = [1./re for re in Res2]; nu_s.append(nu_s2)
+#Res3 = [50, 90, 100]; nu_s3 = [1./re for re in Res3]; nu_s.append(nu_s3)
+#Res4 = [400, 500, 900, 1000]; nu_s4 = [1./re for re in Res4]; nu_s.append(nu_s4)
+#nu = Constant(nu_s[0][0])
+#
+#const_params_list = [{"eps": epss, "r": r_s, "nu": nu_s[0]}]
+#for nu_ in nu_s[1:]:
+#    const_params_list.append({"eps": [epss[-1]], "r": [r_s[-1]], "nu": nu_})
+#params_to_check = {"nu": [a[-1] for a in nu_s]}
+#print("params_to_check: ", params_to_check)
 
 
 var_problem = {
@@ -85,11 +85,11 @@ for nref in range(1, args.nref+1):
     solver_ = get_solver(args, problem_)
     solver_.gamma.assign(0.)
 
-    #Solve a Stokes problem first and use as initial guess
-    problem_.interpolate_initial_guess(solver_.z)
-    solver_.no_convection = True
-    results0 = run_solver(solver_, args, {"r": [2.0]})
-    solver_.no_convection = args.no_convection
+#    #Solve a Stokes problem first and use as initial guess
+#    problem_.interpolate_initial_guess(solver_.z)
+#    solver_.no_convection = True
+#    results0 = run_solver(solver_, args, {"r": [2.0]})
+#    solver_.no_convection = args.no_convection
 
     mesh = solver_.mesh
     h = Function(FunctionSpace(mesh, "DG", 0)).interpolate(CellSize(mesh))
