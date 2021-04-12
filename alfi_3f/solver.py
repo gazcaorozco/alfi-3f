@@ -198,6 +198,8 @@ class NonNewtonianSolver(object):
         fields = self.split_variables()
         u = fields["u"]
         v = fields["v"]
+        q = fields["q"]
+        theta_ = fields.get("theta_")
 
 #        #For the Picard Jacobian #TODO: Should this be here?
 #        w = TrialFunction(self.Z)
@@ -1072,7 +1074,7 @@ class ConformingSolver(NonNewtonianSolver):
 
         if self.formulation_Sup:
             F += (
-                + inner(S,sym(grad(v)))*dx
+                inner(S,sym(grad(v)))*dx
                 - inner(G,ST) * dx
                 )
 
