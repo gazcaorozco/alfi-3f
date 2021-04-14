@@ -21,7 +21,9 @@ class ImplicitCarreau_ldc(NonNewtonianProblem_Sup):
 
     def bcs(self, Z):
         bcs = [DirichletBC(Z.sub(1), self.driver(Z.ufl_domain()), 4),
-               DirichletBC(Z.sub(1), Constant((0., 0.)), [1, 2, 3])]
+               DirichletBC(Z.sub(1), Constant((0., 0.)), 1),
+               DirichletBC(Z.sub(1), Constant((0., 0.)), 2),
+               DirichletBC(Z.sub(1), Constant((0., 0.)), 3)]
         return bcs
 
     def has_nullspace(self): return True
@@ -32,6 +34,8 @@ class ImplicitCarreau_ldc(NonNewtonianProblem_Sup):
         visc_diff = (1./(2.*self.nu))*(1. - self.tau)
         visc_diff2 = (2.*self.nu2)*(1. - self.tau2)
         G = visc_diff2*pow(1 + (1./self.eps2)*inner(D,D),nn2)*D + 2.*self.nu2*self.tau2*D -  (1./(2.*self.nu))*self.tau*S - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S
+        ##For tests
+        G = D - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S
         return G
 
     def const_rel_picard(self,S, D, S0, D0):

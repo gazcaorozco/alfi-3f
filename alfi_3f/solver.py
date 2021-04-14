@@ -644,11 +644,11 @@ class NonNewtonianSolver(object):
             if self.formulation_Lup:
                 jmp_penalty = self.problem.const_rel(U_jmp)
             else:
-                jmp_penalty = self.problem.explicit_cr(U_jmp_bdry)
+                jmp_penalty = self.problem.explicit_cr(U_jmp)
         elif form == "plaw":
             jmp_penalty = 2. * self.nu * pow(inner(U_jmp,U_jmp), (float(self.r)-2.)/2.)*U_jmp
         elif form == "quadratic":
-            jmp_penalty = 2. * self.nu * U_jmp_bdry
+            jmp_penalty = 2. * self.nu * U_jmp
         return jmp_penalty
 
     def solve(self, param, info_param, predictor="trivial"):
@@ -1481,6 +1481,7 @@ class HDivSolver(NonNewtonianSolver):
 
         #For the jump penalisation
         U_jmp = 2. * avg(outer(u,n))
+        penalty_form = "cr" #"plaw", "quadratic", "cr"
         sigma = Constant(5.) * self.Z.sub(self.velocity_id).ufl_element().degree()**2  #TODO: give this through args
         sigma_ = Constant(0.5) * self.Z.sub(self.velocity_id).ufl_element().degree()**2
 
@@ -1499,36 +1500,36 @@ class HDivSolver(NonNewtonianSolver):
                 - inner(avg(S), 2*avg(outer(v, n))) * dS
             )
             if self.fluxes == "ldg":
-                jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form="cr")
+                jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form)
                 F += (
                     sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
                 )
             elif self.fluxes == "mixed":
-                jmp_penalty = self.ip_penalty_jump(1., U_jmp, form="cr") #try 1/avg(h)
+                jmp_penalty = self.ip_penalty_jump(1., U_jmp, form=penalty_form) #try 1/avg(h)
                 F += (
                     sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
-                    - (sigma_*avg(h)) * inner(2*avg(S[i,j]*n[j]),avg(T[i,j]*n[j])) * dS
+                    - (sigma_*avg(h)) * inner(2*avg(S[i,j]*n[j]),avg(ST[i,j]*n[j])) * dS
                 )
         elif self.formulation_LSup:
             F += (
                 inner(L, LT) * dx
                 + inner(2*avg(outer(u,n)), avg(LT)) * dS
-                + inner(G, T) * dx
+                + inner(G, ST) * dx
                 + inner(S, sym(grad(v))) * dx
                 )
             if self.fluxes == "ldg":
-                jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form="cr")
+                jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form)
                 F += (
                     sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
                 )
             elif self.fluxes == "mixed":
-                jmp_penalty = self.ip_penalty_jump(1., U_jmp, form="cr") #try 1/avg(h)
+                jmp_penalty = self.ip_penalty_jump(1., U_jmp, form=penalty_form) #try 1/avg(h)
                 F += (
                     sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
-                    - (sigma_*avg(h)) * inner(2*avg(S[i,j]*n[j]),avg(T[i,j]*n[j])) * dS
+                    - (sigma_*avg(h)) * inner(2*avg(S[i,j]*n[j]),avg(ST[i,j]*n[j])) * dS
                 )
         elif self.formulation_Lup:
-            jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form="cr")
+            jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form)
             F += (
                 inner(L, LT) * dx
                 + inner(2*avg(outer(u,n)), avg(LT)) * dS
@@ -1548,10 +1549,10 @@ class HDivSolver(NonNewtonianSolver):
             if self.formulation_LSup:
                 if self.fluxes == "mixed":
                     jmp_penalty_bdry = self.ip_penalty_jump(1., U_jmp_bdry, form=form_) #Try with 1/h
-                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],T[i,j]*n[j])*ds(bid)
+                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],ST[i,j]*n[j])*ds(bid)
                 elif self.fluxes == "ldg":
                     jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
-                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
+                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
             elif self.formulation_Lup:
                 jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
                 abc = inner(outer(u-g,n), LT)*ds(bid)  + sigma*inner(jmp_penalty_bdry, outer(v,n))*ds(bid)
@@ -1562,10 +1563,10 @@ class HDivSolver(NonNewtonianSolver):
             elif self.formulation_Sup:
                 if self.fluxes == "ldg":
                     jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
-                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
+                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
                 if self.fluxes == "mixed":
                     jmp_penalty_bdry = self.ip_penalty_jump(1., U_jmp_bdry, form=form_) #Try with 1/h
-                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],T[i,j]*n[j])*ds(bid)
+                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],ST[i,j]*n[j])*ds(bid)
             elif self.formulation_up:
                 abc = -inner(outer(v,n),2*self.nu*sym(grad(u)))*ds(bid) - inner(outer(u-g,n),2*self.nu*sym(grad(v)))*ds(bid) + 2.*self.nu*(sigma/h)*inner(v,u-g)*ds(bid)
             return abc
@@ -1584,7 +1585,7 @@ class HDivSolver(NonNewtonianSolver):
             g = bc.function_arg
             bid = bc.sub_domain
             exterior_markers.remove(bid)
-            F += a_bc(u, v, bid, g, form_="cr")
+            F += a_bc(u, v, bid, g, form_=penalty_form)
             F += c_bc(u, v, bid, g, self.advect)
         for bid in exterior_markers:
             F += c_bc(u, v, bid, None, self.advect)
