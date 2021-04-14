@@ -34,7 +34,7 @@ class NonNewtonianSolver(object):
                  patch_composition="additive", restriction=False, smoothing=None, cycles=None,
                  rebalance_vertices=False, hierarchy_callback=None, high_accuracy=False, thermal_conv="none",
                  linearisation = "newton", low_accuracy = False, no_convection = False,
-                 exactly_div_free = True, fluxes=None):
+                 exactly_div_free = True, fluxes=None, ip_magic=5.0):
 
         assert solver_type in {"almg", "allu", "lu", "aljacobi", "alamg", "simple"}, "Invalid solver type %s" % solver_type
         if stabilisation_type == "none":
@@ -70,6 +70,7 @@ class NonNewtonianSolver(object):
         self.formulation = self.problem.formulation
         self.linearisation = linearisation
         self.fluxes = fluxes
+        self.ip_magic = ip_magic
         assert self.formulation in {
                 "T-S-u-p",
                 "T-u-p",
@@ -87,6 +88,7 @@ class NonNewtonianSolver(object):
         self.formulation_Tup = (self.formulation == "T-u-p")
         self.formulation_has_stress = self.formulation_Sup or self.formulation_LSup or self.formulation_TSup
         if (self.formulation_Tup or self.formulation_TSup): assert not(self.thermal_conv is None), "You have to choose the convection regime (natural or forced)"
+
         def rebalance(dm, i):
             if rebalance_vertices:
                 # if not dm.rebalanceSharedPoints(useInitialGuess=False, parallel=False):
@@ -1431,6 +1433,12 @@ class P1P0Solver(ScottVogeliusSolver):
         return F
 
 class HDivSolver(NonNewtonianSolver):
+    """
+    formulation u-p: Implemented only for Newtonian problems
+    formulation S-u-p: Works only for an explicit CR of the form D=D(S); implements LDG and Mixed fluxes
+    formulation L-u-p: L is a lifting of the velocity jumps; this is meant for explicit non-Newtonian relations S=S(D); implements LDG and IP fluxes;
+    formulation L-S-u-p: meant to work in the general implicit case; implements LDG and Mixed Fluxes.
+    """
 
     def residual(self):
 
@@ -1482,8 +1490,8 @@ class HDivSolver(NonNewtonianSolver):
         #For the jump penalisation
         U_jmp = 2. * avg(outer(u,n))
         penalty_form = "cr" #"plaw", "quadratic", "cr"
-        sigma = Constant(5.) * self.Z.sub(self.velocity_id).ufl_element().degree()**2  #TODO: give this through args
-        sigma_ = Constant(0.5) * self.Z.sub(self.velocity_id).ufl_element().degree()**2
+        sigma = Constant(self.ip_magic) * self.Z.sub(self.velocity_id).ufl_element().degree()**2
+        sigma_ = Constant(0.5) * self.Z.sub(self.velocity_id).ufl_element().degree()**2  #Or take them equal??
 
         if self.formulation_up:
             F += (
@@ -1538,7 +1546,7 @@ class HDivSolver(NonNewtonianSolver):
                 - inner(avg(G), 2*avg(outer(v, n))) * dS
                 )
             if self.fluxes == "ip":
-                S_rh = self.problem.const_rel(-l)
+                S_rh = self.problem.const_rel(-L)
                 F -= inner(avg(S_rh), 2*avg(outer(v,n))) * dS
         elif self.formulation_Tup or self.formulation_TSup:
             raise(NotImplementedError)

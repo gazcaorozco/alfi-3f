@@ -7,13 +7,14 @@ from firedrake.petsc import PETSc
 #PETSc.Sys.popErrorHandler()
 
 class ImplicitCarreau_ldc(NonNewtonianProblem_Sup):
-    def __init__(self,baseN,r,nu,eps,tau,r2,nu2,eps2,tau2,diagonal=None,regularised=True):
+    def __init__(self,baseN,r,nu,eps,tau,r2,nu2,eps2,tau2,diagonal=None,regularised=True,explicit=False):
         super().__init__(r=r,nu=nu,eps=eps,tau=tau,r2=r2,nu2=nu2,eps2=eps2,tau2=tau2)
         if diagonal is None:
             diagonal = "left"
         self.diagonal = diagonal
         self.regularised = regularised
         self.baseN = baseN
+        self.explicit = explicit
 
     def mesh(self, distribution_parameters):
         base = RectangleMesh(self.baseN, self.baseN, 2, 2, distribution_parameters=distribution_parameters, diagonal = self.diagonal)
@@ -33,9 +34,11 @@ class ImplicitCarreau_ldc(NonNewtonianProblem_Sup):
         nn2 = (self.r2-2)/(2.)
         visc_diff = (1./(2.*self.nu))*(1. - self.tau)
         visc_diff2 = (2.*self.nu2)*(1. - self.tau2)
-        G = visc_diff2*pow(1 + (1./self.eps2)*inner(D,D),nn2)*D + 2.*self.nu2*self.tau2*D -  (1./(2.*self.nu))*self.tau*S - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S
-        ##For tests
-        G = D - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S
+
+        if self.explicit:
+            G = D - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S
+        else:
+            G = visc_diff2*pow(1 + (1./self.eps2)*inner(D,D),nn2)*D + 2.*self.nu2*self.tau2*D -  (1./(2.*self.nu))*self.tau*S - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S
         return G
 
     def const_rel_picard(self,S, D, S0, D0):
@@ -43,7 +46,11 @@ class ImplicitCarreau_ldc(NonNewtonianProblem_Sup):
         nn2 = (self.r2-2)/(2.)
         visc_diff = (1./(2.*self.nu))*(1. - self.tau)
         visc_diff2 = (2.*self.nu2)*(1. - self.tau2)
-        G0 = visc_diff2*pow(1 + (1./self.eps2)*inner(D,D),nn2)*D0 + 2.*self.nu2*self.tau2*D0 -  (1./(2.*self.nu))*self.tau*S0 - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S0
+
+        if self.explicit:
+            G0 = D0 - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S0
+        else:
+            G0 = visc_diff2*pow(1 + (1./self.eps2)*inner(D,D),nn2)*D0 + 2.*self.nu2*self.tau2*D0 -  (1./(2.*self.nu))*self.tau*S0 - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S0
         return G0
 
     def driver(self, domain):
@@ -60,10 +67,72 @@ class ImplicitCarreau_ldc(NonNewtonianProblem_Sup):
         w_expr = self.driver(z.ufl_domain())
         z.sub(1).interpolate(w_expr)
 
+class ImplicitCarreau_ldc_Hdiv(NonNewtonianProblem_LSup):
+    def __init__(self,baseN,r,nu,eps,tau,r2,nu2,eps2,tau2,diagonal=None,regularised=True,explicit=False):
+        super().__init__(r=r,nu=nu,eps=eps,tau=tau,r2=r2,nu2=nu2,eps2=eps2,tau2=tau2)
+        if diagonal is None:
+            diagonal = "left"
+        self.diagonal = diagonal
+        self.regularised = regularised
+        self.baseN = baseN
+
+    def mesh(self, distribution_parameters):
+        base = RectangleMesh(self.baseN, self.baseN, 2, 2, distribution_parameters=distribution_parameters, diagonal = self.diagonal)
+        return base
+
+    def bcs(self, Z):
+        bcs = [DirichletBC(Z.sub(2), self.driver(Z.ufl_domain()), 4),
+               DirichletBC(Z.sub(2), Constant((0., 0.)), 1),
+               DirichletBC(Z.sub(2), Constant((0., 0.)), 2),
+               DirichletBC(Z.sub(2), Constant((0., 0.)), 3)]
+        return bcs
+
+    def has_nullspace(self): return True
+
+    def const_rel(self, S, D):
+        nn = (2.- self.r)/(2.*(self.r-1.))
+        nn2 = (self.r2-2)/(2.)
+        visc_diff = (1./(2.*self.nu))*(1. - self.tau)
+        visc_diff2 = (2.*self.nu2)*(1. - self.tau2)
+
+        #If you're using this one it's because it's fully implicit...
+        G = visc_diff2*pow(1 + (1./self.eps2)*inner(D,D),nn2)*D + 2.*self.nu2*self.tau2*D -  (1./(2.*self.nu))*self.tau*S - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S
+        #For Tests
+#        G = D - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S
+        return G
+
+    def const_rel_picard(self,S, D, S0, D0):
+        nn = (2.- self.r)/(2.*(self.r-1.))
+        nn2 = (self.r2-2)/(2.)
+        visc_diff = (1./(2.*self.nu))*(1. - self.tau)
+        visc_diff2 = (2.*self.nu2)*(1. - self.tau2)
+
+        if self.explicit:
+            G0 = D0 - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S0
+        else:
+            G0 = visc_diff2*pow(1 + (1./self.eps2)*inner(D,D),nn2)*D0 + 2.*self.nu2*self.tau2*D0 -  (1./(2.*self.nu))*self.tau*S0 - visc_diff*pow(1 + (1./self.eps)*inner(S,S),nn)*S0
+        return G0
+
+    def driver(self, domain):
+        (x, y) = SpatialCoordinate(domain)
+        if self.regularised:
+            driver = as_vector([x*x*(2-x)*(2-x)*(0.25*y*y), 0])
+        else:
+            driver = as_vector([(0.25*y*y), 0])
+        return driver
+
+    def relaxation_direction(self): return "0+:1-"
+
+    def interpolate_initial_guess(self, z):
+        w_expr = self.driver(z.ufl_domain())
+        z.sub(2).interpolate(w_expr)
+
 if __name__ == "__main__":
     parser = get_default_parser()
     parser.add_argument("--diagonal", type=str, default="left",
                         choices=["left", "right", "crossed"])
+    parser.add_argument("--explicit", dest="explicit", default=False,
+                        action="store_true")
     parser.add_argument("--plots", dest="plots", default=False,
                         action="store_true")
     args, _ = parser.parse_known_args()
@@ -78,7 +147,12 @@ if __name__ == "__main__":
     tau = Constant(0.)
     tau2 = Constant(0.)
 
-    problem_Sup = ImplicitCarreau_ldc(args.baseN,r=r,nu=nu,eps=eps,tau=tau,r2=r2,nu2=nu2,eps2=eps2,tau2=tau2,diagonal=args.diagonal)
+    if args.explicit:
+        pclass = ImplicitCarreau_ldc
+    else:
+        pclass = ImplicitCarreau_ldc_Hdiv if args.discretisation in ["bdm1p0", "rt1p0"] else ImplicitCarreau_ldc
+
+    problem_Sup = pclass(args.baseN,r=r,nu=nu,eps=eps,tau=tau,r2=r2,nu2=nu2,eps2=eps2,tau2=tau2,diagonal=args.diagonal,explicit=args.explicit)
     solver_Sup = get_solver(args, problem_Sup)
 
     problem_Sup.interpolate_initial_guess(solver_Sup.z)
