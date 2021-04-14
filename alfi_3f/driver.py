@@ -36,7 +36,7 @@ def get_default_parser():
     parser.add_argument("--thermal-conv", type=str, default="none",
                         choices=["none", "natural_Ra", "natural_Ra2", "natural_Gr", "forced"])
     parser.add_argument("--discretisation", type=str, required=True,
-                        choices=["sv","th","p1p1","p1p0","bdm1p0","rtp0"])
+                        choices=["sv","th","p1p1","p1p0","bdm1p0","rt1p0"])
     parser.add_argument("--gamma", type=float, default=1e4)
     parser.add_argument("--clear", dest="clear", default=False,
                         action="store_true")

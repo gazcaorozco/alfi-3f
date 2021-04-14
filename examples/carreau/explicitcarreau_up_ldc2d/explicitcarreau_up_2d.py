@@ -21,7 +21,9 @@ class ImplicitCarreau_ldc(NonNewtonianProblem_up):
 
     def bcs(self, Z):
         bcs = [DirichletBC(Z.sub(0), self.driver(Z.ufl_domain()), 4),
-               DirichletBC(Z.sub(0), Constant((0., 0.)), [1, 2, 3])]
+               DirichletBC(Z.sub(0), Constant((0., 0.)), 1),
+               DirichletBC(Z.sub(0), Constant((0., 0.)), 2),
+               DirichletBC(Z.sub(0), Constant((0., 0.)), 3)]
         return bcs
 
     def has_nullspace(self): return True

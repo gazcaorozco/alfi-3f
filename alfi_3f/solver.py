@@ -251,6 +251,7 @@ class NonNewtonianSolver(object):
 #        else:
 #            D0 = sym(grad(u0))
         bcs = problem.bcs(Z)
+        self.bcs = bcs
         nsp = problem.nullspace(Z)
 
         if nsp is not None and solver_type == "lu":
@@ -1474,8 +1475,8 @@ class HDivSolver(NonNewtonianSolver):
             self.gamma * inner(div(u), div(v))*dx
             - p * div(v) * dx
             - div(u) * q * dx
-            - advect * dot(u ,div(outer(v,u)))*dx
-            + advect * dot(v('+')-v('-'), uflux_int_('+')-uflux_int_('-'))*dS
+            - self.advect * dot(u ,div(outer(v,u)))*dx
+            + self.advect * dot(v('+')-v('-'), uflux_int_('+')-uflux_int_('-'))*dS
         )
 
         #For the jump penalisation
@@ -1562,7 +1563,7 @@ class HDivSolver(NonNewtonianSolver):
                 if self.fluxes == "ldg":
                     jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
                     abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
-                if self.fluxes == "mixed"
+                if self.fluxes == "mixed":
                     jmp_penalty_bdry = self.ip_penalty_jump(1., U_jmp_bdry, form=form_) #Try with 1/h
                     abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],T[i,j]*n[j])*ds(bid)
             elif self.formulation_up:
@@ -1584,9 +1585,9 @@ class HDivSolver(NonNewtonianSolver):
             bid = bc.sub_domain
             exterior_markers.remove(bid)
             F += a_bc(u, v, bid, g, form_="cr")
-            F += c_bc(u, v, bid, g, advect)
+            F += c_bc(u, v, bid, g, self.advect)
         for bid in exterior_markers:
-            F += c_bc(u, v, bid, None, advect)
+            F += c_bc(u, v, bid, None, self.advect)
         return F
 
     def get_transfers(self):
@@ -1603,7 +1604,7 @@ class HDivSolver(NonNewtonianSolver):
     def distribution_parameters(self):
         return {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 1)}
 
-class RTSolver(HdivSolver):
+class RTSolver(HDivSolver):
 
     def function_space(self, mesh, k):
         eleth = FiniteElement("CG", mesh.ufl_cell(), k)
@@ -1626,7 +1627,7 @@ class RTSolver(HdivSolver):
         return Z
 
 
-class BDMSolver(HdivSolver):
+class BDMSolver(HDivSolver):
 
     def function_space(self, mesh, k):
         eleth = FiniteElement("CG", mesh.ufl_cell(), k)
