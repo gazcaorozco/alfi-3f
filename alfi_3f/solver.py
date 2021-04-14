@@ -195,56 +195,12 @@ class NonNewtonianSolver(object):
         self.z = z
 
         #Split and define velocity u and test function v
-        fields = self.split_variables()
+        fields = self.split_variables(self.z)
         u = fields["u"]
         v = fields["v"]
         q = fields["q"]
         theta_ = fields.get("theta_")
 
-#        #For the Picard Jacobian #TODO: Should this be here?
-#        w = TrialFunction(self.Z)
-#        if self.formulation_Sup:
-#            (S0_,u0,p0) = split(w)
-#        if self.formulation_LSup:
-#            (D0_,S0_,u0,p0) = split(w)
-#        elif self.formulation_up:
-#            (u0, p0) = split(w)
-#        elif self.formulation_TSup:
-#            (theta0,S0_,u0,p0) = split(w)
-#        elif self.formulation_Tup:
-#            (theta0,u0, p0) = split(w)
-#        if self.formulation_has_stress:
-#            if self.tdim == 2:
-#                if self.exactly_div_free:
-#                    (S0_1,S0_2) = split(S0_)
-#                    S0 = as_tensor(((S0_1,S0_2),(S0_2,-S0_1)))
-#                else:
-#                    (S0_1,S0_2,S0_3) = split(S0_)
-#                    S0 = as_tensor(((S0_1,S0_2),(S0_2,S0_3)))
-#            else:
-#                if self.exactly_div_free:
-#                    (S0_1,S0_2,S0_3,S0_4,S0_5) = split(S0_)
-#                    S0 = as_tensor(((S0_1,S0_2,S0_3),(S0_2,S0_5,S0_4),(S0_3,S0_4,-S0_1-S0_5)))
-#                else:
-#                    (S0_1,S0_2,S0_3,S0_4,S0_5,S0_6) = split(S0_)
-#                    S0 = as_tensor(((S0_1,S0_2,S0_3),(S0_2,S0_5,S0_4),(S0_3,S0_4,S0_5)))
-#        if self.formulation_LSup:
-#            if self.tdim == 2:
-#                if self.exactly_div_free:
-#                    (D0_1,D0_2) = split(D0_)
-#                    D0 = as_tensor(((D0_1,D0_2),(D0_2,-D0_1)))
-#                else:
-#                    (D0_1,D0_2,D0_3) = split(D0_)
-#                    D0 = as_tensor(((D0_1,D0_2),(D0_2,D0_3)))
-#            else:
-#                if self.exactly_div_free:
-#                    (D0_1,D0_2,D0_3,D0_4,D0_5) = split(D0_)
-#                    D0 = as_tensor(((D0_1,D0_2,D0_3),(D0_2,D0_5,D0_4),(D0_3,D0_4,-D0_1-D0_5)))
-#                else:
-#                    (D0_1,D0_2,D0_3,D0_4,D0_5,D0_6) = split(D0_)
-#                    D0 = as_tensor(((D0_1,D0_2,D0_3),(D0_2,D0_5,D0_4),(D0_3,D0_4,D0_6)))
-#        else:
-#            D0 = sym(grad(u0))
         bcs = problem.bcs(Z)
         nsp = problem.nullspace(Z)
 
@@ -329,216 +285,6 @@ class NonNewtonianSolver(object):
         self.F = F
         self.J = self.get_jacobian()
 
-#FIXME: I don't want this here...
-#        if (linearisation == "picard" or linearisation == "picard_stress"):
-##            if self.formulation_Tup or self.formulation_TSup: raise NotImplementedError("Picard linearisation hasn't been implemented for problems involving temperature")
-#        #"picard": full Picard
-#        #"picard_stress": Picard only in the constitutive relation (not on the advective terms)
-#            if self.problem.formulation in ["S-u-p","D-S-u-p","Temp-S-u-p","OB_Temp-S-u-p"]:
-#                G0 = self.problem.const_rel_picard(S,D,S0,D0)
-#            elif self.problem.formulation in ["u-p","Temp-u-p","OB_Temp-u-p"]:
-#                G0 = self.problem.const_rel_picard(D,D0)
-#            elif self.problem.formulation in ["General_Temp-u-p","GeneralOB_Temp-u-p"]:
-#                G0 = self.problem.const_rel_picard(D,D0,theta)
-#            elif self.problem.formulation in ["General_Temp-S-u-p","GeneralOB_Temp-S-u-p"]:
-#                G0 = self.problem.const_rel_picard(S,D,theta,S0,D0,theta0)
-#            if self.formulation_Tup or self.formulation_TSup:
-#                th_flux0 = self.problem.const_rel_temperature(theta, grad(theta0))  #Assumes the constitutive relation is linear in the second entry
-#
-#            if self.formulation_Sup:
-#                J0 = (
-#                     inner(S0,sym(grad(v)))*dx
-#                     + self.gamma * inner(div(u0), div(v))*dx
-#                     + self.advect * inner(dot(grad(u0), u), v)*dx
-#                     - p0 * div(v) * dx
-#                     - div(u0) * q * dx
-#                     + inner(G0,ST) * dx
-#                    )
-#            elif self.formulation_LSup:
-#                J0 = (
-#                     inner(S0,sym(grad(v)))*dx
-#                     + self.gamma * inner(div(u0), div(v))*dx
-#                     + self.advect * inner(dot(grad(u0), u), v)*dx
-#                     - p0 * div(v) * dx
-#                     - div(u0) * q * dx
-#                     - inner(D0- sym(grad(u0)),ST) * dx
-#                     + inner(G0,DT) * dx
-#                    )
-#            elif self.formulation_up:
-#                J0 = (
-#                      inner(G0,sym(grad(v)))*dx
-#                      + self.gamma * inner(div(u0), div(v))*dx
-#                      + self.advect * inner(dot(grad(u0), u), v)*dx
-#                      - p0 * div(v) * dx
-#                      - div(u0) * q * dx
-#                     )
-#            elif self.problem.formulation == "OB_Temp-u-p" or self.problem.formulation == "GeneralOB_Temp-u-p":
-#                """
-#                The non-dimensional forms "rayleigh1" and "rayleigh2" use a time-scale based on heat diffusivity and only differ in the
-#                choice of how to balance the pressure term. With the non-dimensional form "grashof" one assumes that all the gravitational
-#                potential energy gets transformed into kinetic energy and so the characteristic velocity scale is chosen accordingly.
-#                For a non-Newtonian fluid (we have tried the Ostwald-de Waele power law relation), more non-dimensional numbers will
-#                arising from the constitutive relation will be necessary.
-#                """
-#                #If the Dissipation number is not defined, set it to zero.
-#                if not("Di" in list(self.problem.const_rel_params.keys())): self.Di = Constant(0.)
-#                if not("Theta" in list(self.problem.const_rel_params.keys())): self.Theta = Constant(0.)
-#                g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
-#                if self.problem.non_dimensional == "rayleigh1":
-#                    J0 = (
-#                        self.Pr * inner(G0,sym(grad(v)))*dx
-#                        + self.gamma * inner(div(u0), div(v))*dx
-#                        + self.advect * inner(dot(grad(u0), u), v)*dx
-#                        - p0 * div(v) * dx
-#                        + (self.Ra*self.Pr) * inner(theta0*g, v) * dx
-#                        - div(u0) * q * dx
-#                        + inner(dot(grad(theta0), u), theta_) * dx
-#                        + self.Di * inner((theta0)*dot(g, u), theta_) * dx
-#                        + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
-#                        + inner(th_flux0, grad(theta_)) * dx
-#                        - (self.Di/self.Ra) * inner(inner(G0,sym(grad(u))), theta_) * dx
-#                        )
-#                elif self.problem.non_dimensional == "rayleigh2":
-#                    J0 = (
-#                        inner(G0,sym(grad(v)))*dx
-#                        + self.gamma * inner(div(u0), div(v))*dx
-#                        + (1./self.Pr) * self.advect * inner(dot(grad(u0), u), v)*dx
-#                        - p0 * div(v) * dx
-#                        + (self.Ra) * inner(theta0*g, v) * dx
-#                        - div(u0) * q * dx
-#                        + inner(dot(grad(theta0), u), theta_) * dx
-#                        + self.Di * inner((theta0)*dot(g, u), theta_) * dx
-#                        + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
-#                        + inner(th_flux0, grad(theta_)) * dx
-#                        - (self.Di/self.Ra) * inner(inner(G0,sym(grad(u))),theta_) * dx
-#                        )
-#                elif self.problem.non_dimensional == "grashof":
-#                    J0 = (
-#                        (1./sqrt(self.Gr)) * inner(G0,sym(grad(v)))*dx
-#                        + self.gamma * inner(div(u0), div(v))*dx
-#                        + self.advect * inner(dot(grad(u0), u), v)*dx
-#                        - p0 * div(v) * dx
-#                        + inner(theta0*g, v) * dx
-#                        - div(u0) * q * dx
-#                        + inner(dot(grad(theta0), u), theta_) * dx
-#                        + self.Di * inner((theta0)*dot(g, u), theta_) * dx
-#                        + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
-#                        + (1./(self.Pr * sqrt(self.Gr))) * inner(th_flux0, grad(theta_)) * dx
-#                        - (self.Di/sqrt(self.Gr)) * inner(inner(G0,sym(grad(u))),theta_) * dx
-#                        )
-#            elif self.problem.formulation == "OB_Temp-S-u-p" or self.problem.formulation == "GeneralOB_Temp-S-u-p":
-#                if not("Di" in list(self.problem.const_rel_params.keys())): self.Di = Constant(0.)
-#                if not("Theta" in list(self.problem.const_rel_params.keys())): self.Theta = Constant(0.)
-#                g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
-#                if self.problem.non_dimensional == "rayleigh1":
-#                    J0 = (
-#                        self.Pr * inner(S0,sym(grad(v)))*dx
-#                        + self.gamma * inner(div(u0), div(v))*dx
-#                        + self.advect * inner(dot(grad(u0), u), v)*dx
-#                        - p0 * div(v) * dx
-#                        + (self.Ra*self.Pr) * inner(theta0*g, v) * dx
-#                        - div(u0) * q * dx
-#                        - inner(G0,ST) * dx
-#                        + inner(dot(grad(theta0), u), theta_) * dx
-#                        + self.Di * inner((theta0)*dot(g, u), theta_) * dx
-#                        + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
-#                        + inner(th_flux0, grad(theta_)) * dx
-#                        - (self.Di/self.Ra) * inner(inner(S0,sym(grad(u))), theta_) * dx
-#                        - (self.Di/self.Ra) * inner(inner(S,sym(grad(u0))), theta_) * dx
-#                        )
-#                elif self.problem.non_dimensional == "rayleigh2":
-#                    J0 = (
-#                        inner(S0,sym(grad(v)))*dx
-#                        + self.gamma * inner(div(u0), div(v))*dx
-#                        + (1./self.Pr) * self.advect * inner(dot(grad(u0), u), v)*dx
-#                        - p0 * div(v) * dx
-#                        + (self.Ra) * inner(theta0*g, v) * dx
-#                        - div(u0) * q * dx
-#                        - inner(G0,ST) * dx
-#                        + inner(dot(grad(theta0), u), theta_) * dx
-#                        + self.Di * inner((theta0)*dot(g, u), theta_) * dx
-#                        + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
-#                        + inner(th_flux0, grad(theta_)) * dx
-#                        - (self.Di/self.Ra) * inner(inner(S0,sym(grad(u))), theta_) * dx
-#                        - (self.Di/self.Ra) * inner(inner(S,sym(grad(u0))), theta_) * dx
-#                        )
-#                elif self.problem.non_dimensional == "grashof":
-#                    J0 = (
-#                        (1./sqrt(self.Gr)) * inner(S0,sym(grad(v)))*dx
-#                        + self.gamma * inner(div(u0), div(v))*dx
-#                        + self.advect * inner(dot(grad(u0), u), v)*dx
-#                        - p0 * div(v) * dx
-#                        + inner(theta0*g, v) * dx
-#                        - div(u0) * q * dx
-#                        - inner(G0,ST) * dx
-#                        + inner(dot(grad(theta0), u), theta_) * dx
-#                        + self.Di * inner((theta0)*dot(g, u), theta_) * dx
-#                        + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
-#                        + (1./(self.Pr * sqrt(self.Gr))) * inner(th_flux0, grad(theta_)) * dx
-#                        - (self.Di/sqrt(self.Gr)) * inner(inner(S0,sym(grad(u))), theta_) * dx
-#                        - (self.Di/sqrt(self.Gr)) * inner(inner(S,sym(grad(u0))), theta_) * dx
-#                        )
-#            elif self.problem.formulation == "Temp-u-p" or self.problem.formulation == "General_Temp-u-p":
-#                """
-#                For the forced convection regime I choose a characteristic velocity, and so the Peclet and
-#                Reynolds numbers will appear in the formulation
-#
-#                """
-#                if not("Br" in list(self.problem.const_rel_params.keys())): self.Br = Constant(0.)
-#                J0 = (
-#                    inner(G0,sym(grad(v)))*dx
-#                    + self.gamma * inner(div(u0), div(v))*dx
-#                    + self.Re * self.advect * inner(dot(grad(u0), u), v)*dx
-#                    - p0 * div(v) * dx
-#                    - div(u0) * q * dx
-#                    + inner(dot(grad(theta0), u), theta_) * dx
-#                    + (1./self.Pe) * inner(th_flux0, grad(theta_)) * dx
-#                    - (self.Br/self.Pe) * inner(inner(G0,sym(grad(u))), theta_) * dx
-#                    )
-#            elif self.problem.formulation == "Temp-S-u-p" or self.problem.formulation == "General_Temp-S-u-p":
-#                if not("Br" in list(self.problem.const_rel_params.keys())): self.Br = Constant(0.)
-#                J0 = (
-#                    inner(S0,sym(grad(v)))*dx
-#                    + self.gamma * inner(div(u0), div(v))*dx
-#                    + self.Re * self.advect * inner(dot(grad(u0), u), v)*dx
-#                    - p0 * div(v) * dx
-#                    - div(u0) * q * dx
-#                    - inner(G0,ST) * dx
-#                    + inner(dot(grad(theta0), u), theta_) * dx
-#                    + (1./self.Pe) * inner(th_flux0, grad(theta_)) * dx
-#                    - (self.Br/self.Pe) * inner(inner(S0,sym(grad(u))), theta_) * dx
-#                    - (self.Br/self.Pe) * inner(inner(S,sym(grad(u0))), theta_) * dx
-#                    )
-#            if (linearisation == "picard_stress"):
-#                if (self.problem.formulation in ["OB_Temp-S-u-p","GeneralOB_Temp-S-u-p","OB_Temp-u-p","GeneralOB_Temp-u-p"]) and self.problem.non_dimensional == "rayleigh2":
-#                    J0 += (1./self.Pr) * self.advect * inner(dot(grad(u), u0), v)*dx
-#                elif self.problem.formulation in ["Temp-u-p", "General_Temp-u-p", "Temp-S-u-p", "General_Temp-S-u-p"]:
-#                    J0 += self.Re * self.advect * inner(dot(grad(u), u0), v)*dx
-#                else:
-#                    J0 += self.advect * inner(dot(grad(u), u0), v)*dx
-#                if self.formulation_Tup or self.formulation_TSup:
-#                    J0 += inner(dot(grad(theta), u0), theta_) * dx
-#
-#            if self.stabilisation_form0 is not None:
-#               J0 += (self.advect * self.stabilisation_form0)
-#            self.J = J0
-#
-#        if self.linearisation in ["regularised", "unregularised"]:
-#            G0 = self.problem.const_rel_regularised(S, D, S0, D0)
-#            J0 = (
-#                 inner(S0,sym(grad(v)))*dx
-#                 + self.gamma * inner(div(u0), div(v))*dx
-#                 + self.advect * inner(dot(grad(u0), u), v)*dx
-#                 + self.advect * inner(dot(grad(u), u0), v)*dx
-#                 - p0 * div(v) * dx
-#                 - div(u0) * q * dx
-#                 + inner(G0,ST) * dx
-#                )
-#            if self.stabilisation_form0 is not None:
-#               J0 += (self.advect * self.stabilisation_form0)
-#            self.J = J0
-
-
         appctx = self.const_rel_params
         appctx["gamma"] = self.gamma
         appctx["problem"] = self.problem
@@ -563,12 +309,205 @@ class NonNewtonianSolver(object):
 
     def get_jacobian(self):
         if self.linearisation == "newton":
-            self.J = derivative(self.F, self.z)
+            J0 = derivative(self.F, self.z)
         elif self.linearisation in ["picard", "kacanov"]:
-            raise NotImplementedError("Need to implement picard...")
+            """ 'picard': full Picard
+                'kacanov': 'Picard' only in the constitutive relation (not on the advective terms) """
+            #Split variables for current solution and test function
+            fields = self.split_variables(self.z)
+            u = fields["u"]
+            v = fields["v"]
+            p = fields["p"]
+            q = fields["q"]
+            S = fields.get("S")
+            ST = fields.get("ST")
+            L = fields.get("L")
+            LT = fields.get("LT")
+            theta = fields.get("theta")
+            theta_ = fields.get("theta_")
+            D = sym(grad(u))
 
-    def split_variables(self):
-        z = self.z
+            #Split trial function
+            w = TrialFunction(self.Z)
+            fields0 = self.split_variables(w)
+            u0 = fields0["u"]
+            p0 = fields0["p"]
+            S0 = fields0.get("S")
+            L0 = fields0.get("L")
+            theta0 = fields0.get("theta")
+            D0 = sym(grad(u0))
+
+            #Constitutive Relation
+            if self.formulation_Sup:
+                G0 = self.problem.const_rel_picard(S,D,S0,D0)
+            elif self.formulation_TSup:
+                G0 = self.problem.const_rel_picard(S,D,theta,S0,D0)
+            elif self.formulation_up:
+                G0 = self.problem.const_rel_picard(D, D0)
+            elif self.formulation_Tup:
+                G0 = self.problem.const_rel_picard(D, theta, D0)
+            elif self.formulation_LSup:
+                G0 = self.problem.const_rel_picard(S, L, S0, L0)
+            elif self.formulation_Lup:
+                G0 = self.problem.const_rel_picard(L0)
+
+            if self.formulation_Tup or self.formulation_TSup:
+                th_flux0 = self.problem.const_rel_temperature(theta, grad(theta0))  #Assumes the constitutive relation is linear in the second entry
+
+            #Common to all formulations
+            J0 = (
+                self.gamma * inner(div(u0), div(v))*dx
+                + self.advect * inner(dot(grad(u0), u), v)*dx
+                - p0 * div(v) * dx
+                - div(u0) * q * dx
+            )
+
+            if self.formulation_Sup:
+                J0 += (
+                    inner(S0,sym(grad(v)))*dx
+                    - inner(G0,ST) * dx
+                    )
+
+            elif self.formulation_LSup:
+                J0 += (
+                    inner(S0,sym(grad(v)))*dx
+                    - inner(D0 - L0, SL) * dx
+                    - inner(G0, ST) * dx
+                    )
+            elif self.formulation_up:
+                J0 += (
+                    inner(G0, sym(grad(v)))*dx
+                    )
+
+            elif self.formulation_Tup or self.formulation_TSup:
+                """
+                The non-dimensional forms "rayleigh1" and "rayleigh2" use a time-scale based on heat diffusivity and only differ in the
+                choice of how to balance the pressure term. With the non-dimensional form "grashof" one assumes that all the gravitational
+                potential energy gets transformed into kinetic energy and so the characteristic velocity scale is chosen accordingly.
+                For a non-Newtonian fluid (we have tried the Ostwald-de Waele power law relation), more non-dimensional numbers will
+                arising from the constitutive relation will be necessary.
+    #                """
+                #If the Dissipation number is not defined, set it to zero.
+                if not("Di" in list(self.problem.const_rel_params.keys())): self.Di = Constant(0.)
+                if not("Theta" in list(self.problem.const_rel_params.keys())): self.Theta = Constant(0.)
+                g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
+
+                #Common to all formulations with temperature
+                J0 = (
+                    self.gamma * inner(div(u0), div(v))*dx
+                    - p0 * div(v) * dx
+                    - div(u0) * q * dx
+                    + inner(dot(grad(theta0), u), theta_) * dx
+                )
+
+                if self.thermal_conv == "natural_Ra":
+                    J0 += (
+                        self.advect * inner(dot(grad(u0), u), v)*dx
+                        - (self.Ra*self.Pr) * inner(theta0*g, v) * dx
+                        + inner(th_flux0, grad(theta_)) * dx
+                        + self.Di * inner((theta0)*dot(g, u), theta_) * dx
+                        + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
+                        )
+                    if self.formulation_Tup:
+                        J0 += (
+                            self.Pr * inner(G0,sym(grad(v)))*dx
+                            - (self.Di/self.Ra) * inner(inner(G0,sym(grad(u))), theta_) * dx
+    #                        - (self.Di/self.Ra) * inner(inner(self.problem.const_rel(D,theta),sym(grad(u0))), theta_) * dx
+                            )
+                    elif self.formulation_TSup:
+                        J0 += (
+                            self.Pr * inner(S0,sym(grad(v)))*dx
+                            - inner(G0,ST) * dx
+                            - (self.Di/self.Ra) * inner(inner(S0,sym(grad(u))), theta_) * dx
+                            - (self.Di/self.Ra) * inner(inner(S,sym(grad(u0))), theta_) * dx
+                            )
+
+                elif self.thermal_conv == "natural_Ra2":
+                    J0 += (
+                        + (1./self.Pr) * self.advect * inner(dot(grad(u0), u), v)*dx
+                        - (self.Ra) * inner(theta0*g, v) * dx
+                        + inner(th_flux0, grad(theta_)) * dx
+                        + self.Di * inner((theta0)*dot(g, u), theta_) * dx
+                        + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
+                        )
+                    if self.formulation_Tup:
+                        J0 += (
+                            inner(G0,sym(grad(v)))*dx
+                            - (self.Di/self.Ra) * inner(inner(G0,sym(grad(u))),theta_) * dx #TODO: Newton for this term? Maybe using derivative, and G?
+                            )
+                    elif self.formulation_TSup:
+                        J0 += (
+                            inner(S0,sym(grad(v)))*dx
+                            - inner(G0,ST) * dx
+                            - (self.Di/self.Ra) * inner(inner(S0,sym(grad(u))), theta_) * dx
+                            - (self.Di/self.Ra) * inner(inner(S,sym(grad(u0))), theta_) * dx
+                            )
+                elif self.thermal_conv == "natural_Gr":
+                    J0 += (
+                        self.advect * inner(dot(grad(u0), u), v)*dx
+                        - inner(theta0*g, v) * dx
+                        + (1./(self.Pr * sqrt(self.Gr))) * inner(th_flux0, grad(theta_)) * dx
+                        + self.Di * inner((theta0)*dot(g, u), theta_) * dx
+                        + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
+                        )
+                    if self.formulation_Tup:
+                        J0 += (
+                            (1./sqrt(self.Gr)) * inner(G0,sym(grad(v)))*dx
+                            - (self.Di/sqrt(self.Gr)) * inner(inner(G0,sym(grad(u))),theta_) * dx
+                            )
+                    elif self.formulation_TSup:
+                        J0 += (
+                            (1./sqrt(self.Gr)) * inner(S0,sym(grad(v)))*dx
+                            - inner(G0,ST) * dx
+                            - (self.Di/sqrt(self.Gr)) * inner(inner(S0,sym(grad(u))), theta_) * dx
+                            - (self.Di/sqrt(self.Gr)) * inner(inner(S,sym(grad(u0))), theta_) * dx
+                            )
+
+                elif self.thermal_conv == "forced":
+                    """
+                    For the forced convection regime I choose a characteristic velocity, and so the Peclet and
+                    Reynolds numbers will appear in the formulation
+
+                    """
+                    if not("Br" in list(self.problem.const_rel_params.keys())): self.Br = Constant(0.)
+                    J0 += (
+                        + self.Re * self.advect * inner(dot(grad(u0), u), v)*dx
+                        + (1./self.Pe) * inner(th_flux0, grad(theta_)) * dx
+                        )
+                    if self.formulation_Tup:
+                        J0 += (
+                            inner(G0,sym(grad(v)))*dx
+                            - (self.Br/self.Pe) * inner(inner(G0,sym(grad(u))), theta_) * dx
+                            )
+                    elif self.formulation_TSup:
+                        J0 += (
+                            inner(S0,sym(grad(v)))*dx
+                            - inner(G0,ST) * dx
+                            - (self.Br/self.Pe) * inner(inner(S0,sym(grad(u))), theta_) * dx
+                            - (self.Br/self.Pe) * inner(inner(S,sym(grad(u0))), theta_) * dx
+                            )
+                if (self.linearisation == "kacanov"):
+                    #Add extra term for Newton linearisation of the convective term
+                    if (self.formulation_Tup or self.formulation_TSup) and (self.thermal_conv == "natural_Ra2"):
+                        J0 += (1./self.Pr) * self.advect * inner(dot(grad(u), u0), v)*dx
+                    elif (self.formulation_Tup or self.formulation_TSup) and (self.thermal_conv == "forced"):
+                        J0 += self.Re * self.advect * inner(dot(grad(u), u0), v)*dx
+                    else:
+                        J0 += self.advect * inner(dot(grad(u), u0), v)*dx
+                    #Same for the convective term in the temperature equation
+                    if self.formulation_Tup or self.formulation_TSup:
+                        J0 += inner(dot(grad(theta), u0), theta_) * dx
+
+#            if self.stabilisation_form0 is not None: #FIXME: What happens to the stabilisation?
+#               J0 += (self.advect * self.stabilisation_form0)
+#            self.J = J0
+#
+#            if self.stabilisation_form0 is not None:
+#               J0 += (self.advect * self.stabilisation_form0)
+#            self.J = J0
+        return J0
+
+    def split_variables(self, z):
         Z = self.Z
         fields = {}
         if self.formulation_Sup:
@@ -1034,7 +973,7 @@ class ConformingSolver(NonNewtonianSolver):
     def residual(self):
 
         #Define functions and test functions
-        fields = self.split_variables()
+        fields = self.split_variables(self.z)
         u = fields["u"]
         v = fields["v"]
         p = fields["p"]
@@ -1078,7 +1017,7 @@ class ConformingSolver(NonNewtonianSolver):
                 - inner(G,ST) * dx
                 )
 
-        if self.formulation_LSup:
+        elif self.formulation_LSup:
             F += (
                 inner(S,sym(grad(v)))*dx
                 - inner(D - L, SL) * dx
@@ -1187,7 +1126,6 @@ class ConformingSolver(NonNewtonianSolver):
                         - (self.Br/self.Pe) * inner(inner(S,sym(grad(u))), theta_) * dx
                         )
 
-#        F = (inner(S,grad(v))*dx - inner(p,div(v))*dx - div(u)*q*dx + inner(G,ST)*dx)
         return F
 
 #class HdivSolver(NonNewtonianSolver):
@@ -1236,7 +1174,7 @@ class ScottVogeliusSolver(ConformingSolver):
             raise ValueError("Unknown stabilisation")
         self.qtransfer = qtransfer
 
-        if self.hierarchy == "bary":   #FIXME: if this is not the case then vtransfer is not defined (although for SV it doesn't matter...)
+        if self.hierarchy == "bary":
             vtransfer = SVSchoeberlTransfer((self.nu, self.gamma), self.tdim, self.hierarchy)
             self.vtransfer = vtransfer
 
@@ -1332,7 +1270,7 @@ class P1P1Solver(TaylorHoodSolver):
 
         F = super().residual()
         #Define functions and test functions
-        fields = self.split_variables()
+        fields = self.split_variables(self.z)
         u = fields["u"]
         p = fields["p"]
         q = fields["q"]
@@ -1402,7 +1340,7 @@ class P1P0Solver(ScottVogeliusSolver):
 
         F = super().residual()
         #Define functions and test functions
-        fields = self.split_variables()
+        fields = self.split_variables(self.z)
         p = fields["p"]
         q = fields["q"]
 

@@ -38,7 +38,7 @@ class TempViscosityOBCavity_up(NonIsothermalProblem_up):
         S = K*pow(inner(D,D),nr)*D
         return S
 
-    def const_rel_picard(self,D,D0,theta):
+    def const_rel_picard(self,D, theta, D0):
         nr = (self.r - 2.)/2.
         K = self.viscosity(theta)
         S0 = K*pow(inner(D,D),nr)*D0
@@ -106,7 +106,7 @@ class TempViscosityOBCavity_Sup(NonIsothermalProblem_Sup):
 #        G = D - (1./(2.*self.nu))*pow(inner(S/(2.*self.nu),S/(2.*self.nu)),nr2)*S
         return G
 
-    def const_rel_picard(self,S,D,S0,D0,theta):
+    def const_rel_picard(self,S, D, theta, S0, D0):
         nr = (self.r - 2.)/2.
 #        nr2 = (2. - self.r)/(2.*(self.r - 1.))
         K = self.viscosity(theta)
@@ -154,7 +154,7 @@ if __name__ == "__main__":
                         action="store_true")
     args, _ = parser.parse_known_args()
 
-    assert args.thermal_conv in ["natural_Ra1", "natural_Ra2", "natural_Gr"], "You need to select natural convection"
+    assert args.thermal_conv in ["natural_Ra", "natural_Ra2", "natural_Gr"], "You need to select natural convection"
 
     #Prandtl number
     Pr_s = [1.,10.]

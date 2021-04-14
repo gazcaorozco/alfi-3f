@@ -32,6 +32,12 @@ class ImplicitCarreau_ldc(NonNewtonianProblem_up):
         S = visc_diff2*pow(1 + (1./self.eps)*inner(D,D),nn2)*D + 2.*self.nu*self.tau*D
         return S
 
+    def const_rel_picard(self, D, D0):
+        nn2 = (self.r-2)/(2.)
+        visc_diff2 = (2.*self.nu)*(1. - self.tau)
+        S0 = visc_diff2*pow(1 + (1./self.eps)*inner(D,D),nn2)*D0 + 2.*self.nu*self.tau*D0
+        return S0
+
     def driver(self, domain):
         (x, y) = SpatialCoordinate(domain)
         if self.regularised:
