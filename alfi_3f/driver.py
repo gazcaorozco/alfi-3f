@@ -1,4 +1,4 @@
-from alfi_3f.solver import ScottVogeliusSolver, TaylorHoodSolver, P1P1Solver, P1P0Solver #TODO: Check
+from alfi_3f.solver import ScottVogeliusSolver, TaylorHoodSolver, P1P1Solver, P1P0Solver, BDMSolver, RTSolver
 from mpi4py import MPI
 from firedrake.petsc import PETSc
 from firedrake import *
@@ -29,12 +29,14 @@ def get_default_parser():
                         choices=["uniform", "bary", "uniformbary"])
     parser.add_argument("--stabilisation-type", type=str, default=None,
                         choices=["none", "burman", "gls", "supg"]) #"supg-temp"
+    parser.add_argument("--fluxes", type=str, default=None,
+                        choices=["none", "ldg", "ip", "mixed"])
     parser.add_argument("--linearisation", type=str, default="newton",
                         choices=["newton", "picard", "kacanov"]) #kacanov=full Picard #TODO: "regularised"
     parser.add_argument("--thermal-conv", type=str, default="none",
                         choices=["none", "natural_Ra", "natural_Ra2", "natural_Gr", "forced"])
     parser.add_argument("--discretisation", type=str, required=True,
-                        choices=["sv","th","p1p1","p1p0"]) #Want: hdiv-ldg
+                        choices=["sv","th","p1p1","p1p0","bdm1p0","rtp0"])
     parser.add_argument("--gamma", type=float, default=1e4)
     parser.add_argument("--clear", dest="clear", default=False,
                         action="store_true")
@@ -157,7 +159,9 @@ def get_solver(args, problem, hierarchy_callback=None):
     solver_t = {"sv": ScottVogeliusSolver,
                 "th": TaylorHoodSolver,
                 "p1p1": P1P1Solver,
-                "p1p0": P1P0Solver}[args.discretisation]
+                "p1p0": P1P0Solver,
+                "bdm1p0": BDMSolver,
+                "rt1p0": RTSolver}[args.discretisation]
 
     solver = solver_t(
         problem,
@@ -182,7 +186,8 @@ def get_solver(args, problem, hierarchy_callback=None):
         low_accuracy=args.low_accuracy,
         hierarchy_callback=hierarchy_callback,
         no_convection=args.no_convection,
-        exactly_div_free = True if args.discretisation in ["sv", "hdiv-ldg"] else False
+        exactly_div_free = True if args.discretisation in ["sv", "bdm1p0", "rt1p0"] else False,
+        fluxes = args.fluxes
     )
     return solver
 

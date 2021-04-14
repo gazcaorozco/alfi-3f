@@ -33,7 +33,8 @@ class NonNewtonianSolver(object):
                  patch="macro", hierarchy="bary", use_mkl=False, stabilisation_weight=None,
                  patch_composition="additive", restriction=False, smoothing=None, cycles=None,
                  rebalance_vertices=False, hierarchy_callback=None, high_accuracy=False, thermal_conv="none",
-                 linearisation = "newton", low_accuracy = False, no_convection = False, exactly_div_free = True):
+                 linearisation = "newton", low_accuracy = False, no_convection = False,
+                 exactly_div_free = True, fluxes=None):
 
         assert solver_type in {"almg", "allu", "lu", "aljacobi", "alamg", "simple"}, "Invalid solver type %s" % solver_type
         if stabilisation_type == "none":
@@ -42,6 +43,9 @@ class NonNewtonianSolver(object):
         assert hierarchy in {"uniform", "bary", "uniformbary"}, "Invalid hierarchy type %s" % hierarchy
         assert patch in {"macro", "star"}, "Invalid patch type %s" % patch
         assert linearisation in {"newton", "picard", "kacanov"}, "Invalid linearisation type %s" % linearisation
+        if fluxes == "none":
+            fluxes = None
+        assert fluxes in {None, "ldg", "mixed", "ip"}, "Invalid choice of fluxes %s" % fluxes
         if thermal_conv == "none":
             thermal_conv = None
         assert thermal_conv in {None, "natural_Ra", "natural_Ra2", "natural_Gr", "forced"}, "Invalid thermal convection regime %s" % thermal_conv
@@ -65,6 +69,7 @@ class NonNewtonianSolver(object):
         self.thermal_conv = thermal_conv
         self.formulation = self.problem.formulation
         self.linearisation = linearisation
+        self.fluxes = fluxes
         assert self.formulation in {
                 "T-S-u-p",
                 "T-u-p",
@@ -631,6 +636,20 @@ class NonNewtonianSolver(object):
                 S = as_tensor(((S_1,S_2,S_3),(S_2,S_5,S_4),(S_3,S_4,S_6)))
         return S
 
+    def ip_penalty_jump(self, h_factor, vec, form="cr"):
+        assert form in ["cr", "plaw", "quadratic"], "That is not a valid form for the penalisation term"
+        U_jmp = h_factor * vec
+        if form == "cr":
+            if self.formulation_Lup:
+                jmp_penalty = self.problem.const_rel(U_jmp)
+            else:
+                jmp_penalty = self.problem.explicit_cr(U_jmp_bdry)
+        elif form == "plaw":
+            jmp_penalty = 2. * self.nu * pow(inner(U_jmp,U_jmp), (float(self.r)-2.)/2.)*U_jmp
+        elif form == "quadratic":
+            jmp_penalty = 2. * self.nu * U_jmp_bdry
+        return jmp_penalty
+
     def solve(self, param, info_param, predictor="trivial"):
         """
         param is a string with the name of the parameter we are solving for
@@ -1187,11 +1206,7 @@ class ConformingSolver(NonNewtonianSolver):
                         - (self.Br/self.Pe) * inner(inner(S,sym(grad(u))), theta_) * dx
                         )
 
-#        F = (inner(S,grad(v))*dx - inner(p,div(v))*dx - div(u)*q*dx + inner(G,ST)*dx)
         return F
-
-#class HdivSolver(NonNewtonianSolver):
-
 
 class ScottVogeliusSolver(ConformingSolver):
 
@@ -1203,7 +1218,7 @@ class ScottVogeliusSolver(ConformingSolver):
             eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=5)
         eleu = VectorElement("Lagrange", mesh.ufl_cell(), k)
         elep = FiniteElement("Discontinuous Lagrange", mesh.ufl_cell(), k-1)
-        if self.formulation_Sup:
+        if self.formulation_Sup or self.formulation_Lup:
             Z = FunctionSpace(mesh, MixedElement([eles,eleu,elep]))
         elif self.formulation_LSup:
             Z = FunctionSpace(mesh, MixedElement([eles,eles,eleu,elep]))
@@ -1413,3 +1428,222 @@ class P1P0Solver(ScottVogeliusSolver):
         F -=  inner(avg(delta) * jump(p),jump(q))*dS
 
         return F
+
+class HDivSolver(NonNewtonianSolver):
+
+    def residual(self):
+
+        #Define functions and test functions
+        fields = self.split_variables()
+        u = fields["u"]
+        v = fields["v"]
+        p = fields["p"]
+        q = fields["q"]
+        S = fields.get("S")
+        ST = fields.get("ST")
+        L = fields.get("L")
+        LT = fields.get("LT")
+        theta = fields.get("theta")
+        theta_ = fields.get("theta_")
+        D = sym(grad(u))
+
+        #For the constitutive relation
+        if self.formulation_Sup:
+            assert self.fluxes in ["ldg", "mixed"], "The Hdiv S-u-p formulation has only been implemented with LDG or Mixed fluxes"
+            self.message(RED % "This discretisation/formulation only makes sense for constitutive relations of the form G = D - D*(S)  !!!!")
+            G = self.problem.const_rel(S, D)
+        elif self.formulation_up:
+            assert self.fluxes in ["ip"], "The Hdiv u-p formulation has only been implemented with the Interior Penalty method"
+            self.message(RED % "This Hdiv interior penalty u-p formulation only makes sense for a Newtonian constitutive relation S = 2. * nu * D  !!!!")
+            G = 2. * self.nu * D
+        elif self.formulation_LSup:
+            assert self.fluxes in ["ldg", "mixed"], "The Hdiv L-S-u-p formulation has only been implemented with LDG or Mixed fluxes"
+            G = self.problem.const_rel(S, D + L)
+        elif self.formulation_Lup:
+            assert self.fluxes in ["ip", "ldg"], "The Hdiv L-u-p formulation has only been implemented with LDG or IP fluxes"
+            G = self.problem.const_rel(D + L)
+        else:
+            raise NotImplementedError("This formulation hasn't been implemented with Hdiv-type spaces")
+
+        n = FacetNormal(self.Z.ufl_domain())
+        h = CellDiameter(self.Z.ufl_domain())
+
+        #Common for all formulations
+        uflux_int_ = 0.5*(dot(u, n) + abs(dot(u, n)))*u
+        F = (
+            self.gamma * inner(div(u), div(v))*dx
+            - p * div(v) * dx
+            - div(u) * q * dx
+            - advect * dot(u ,div(outer(v,u)))*dx
+            + advect * dot(v('+')-v('-'), uflux_int_('+')-uflux_int_('-'))*dS
+        )
+
+        #For the jump penalisation
+        U_jmp = 2. * avg(outer(u,n))
+        sigma = Constant(5.) * self.Z.sub(self.velocity_id).ufl_element().degree()**2  #TODO: give this through args
+        sigma_ = Constant(0.5) * self.Z.sub(self.velocity_id).ufl_element().degree()**2
+
+        if self.formulation_up:
+            F += (
+                inner(G, grad(v)) * dx
+                - self.nu * inner(avg(2*sym(grad(u))), 2*avg(outer(v, n))) * dS
+                - self.nu * inner(avg(2*sym(grad(v))), 2*avg(outer(u, n))) * dS
+                + 2. * self.nu * sigma/avg(h) * inner(2*avg(outer(u,n)), 2*avg(outer(v,n))) * dS
+            )
+        elif self.formulation_Sup:
+            F += (
+                inner(G, ST) * dx
+                - inner(avg(ST), 2*avg(outer(u, n))) * dS
+                + inner(S, sym(grad(v))) * dx
+                - inner(avg(S), 2*avg(outer(v, n))) * dS
+            )
+            if self.fluxes == "ldg":
+                jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form="cr")
+                F += (
+                    sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
+                )
+            elif self.fluxes == "mixed":
+                jmp_penalty = self.ip_penalty_jump(1., U_jmp, form="cr") #try 1/avg(h)
+                F += (
+                    sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
+                    - (sigma_*avg(h)) * inner(2*avg(S[i,j]*n[j]),avg(T[i,j]*n[j])) * dS
+                )
+        elif self.formulation_LSup:
+            F += (
+                inner(L, LT) * dx
+                + inner(2*avg(outer(u,n)), avg(LT)) * dS
+                + inner(G, T) * dx
+                + inner(S, sym(grad(v))) * dx
+                )
+            if self.fluxes == "ldg":
+                jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form="cr")
+                F += (
+                    sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
+                )
+            elif self.fluxes == "mixed":
+                jmp_penalty = self.ip_penalty_jump(1., U_jmp, form="cr") #try 1/avg(h)
+                F += (
+                    sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
+                    - (sigma_*avg(h)) * inner(2*avg(S[i,j]*n[j]),avg(T[i,j]*n[j])) * dS
+                )
+        elif self.formulation_Lup:
+            jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form="cr")
+            F += (
+                inner(L, LT) * dx
+                + inner(2*avg(outer(u,n)), avg(LT)) * dS
+                + inner(G, sym(grad(v))) * dx
+                + sigma * inner(jmp_penalty, 2*avg(outer(v,n))) * dS
+                - inner(avg(G), 2*avg(outer(v, n))) * dS
+                )
+            if self.fluxes == "ip":
+                S_rh = self.problem.const_rel(-l)
+                F -= inner(avg(S_rh), 2*avg(outer(v,n))) * dS
+        elif self.formulation_Tup or self.formulation_TSup:
+            raise(NotImplementedError)
+
+        #For BCs
+        def a_bc(u, v, bid, g, form_="cr"):
+            U_jmp_bdry = outer(u-g, n)
+            if self.formulation_LSup:
+                if self.fluxes == "mixed":
+                    jmp_penalty_bdry = self.ip_penalty_jump(1., U_jmp_bdry, form=form_) #Try with 1/h
+                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],T[i,j]*n[j])*ds(bid)
+                elif self.fluxes == "ldg":
+                    jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
+                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
+            elif self.formulation_Lup:
+                jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
+                abc = inner(outer(u-g,n), LT)*ds(bid)  + sigma*inner(jmp_penalty_bdry, outer(v,n))*ds(bid)
+                if self.fluxes == "ldg":
+                    abc -= inner(outer(v,n), G)*ds(bid)
+                elif self.fluxes == "ip":
+                    abc -= inner(outer(v,n), S_rh)*ds(bid)
+            elif self.formulation_Sup:
+                if self.fluxes == "ldg":
+                    jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
+                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
+                if self.fluxes == "mixed"
+                    jmp_penalty_bdry = self.ip_penalty_jump(1., U_jmp_bdry, form=form_) #Try with 1/h
+                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), T)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],T[i,j]*n[j])*ds(bid)
+            elif self.formulation_up:
+                abc = -inner(outer(v,n),2*self.nu*sym(grad(u)))*ds(bid) - inner(outer(u-g,n),2*self.nu*sym(grad(v)))*ds(bid) + 2.*self.nu*(sigma/h)*inner(v,u-g)*ds(bid)
+            return abc
+
+        def c_bc(u, v, bid, g, advect):
+            if g is None:
+                uflux_ext = 0.5*(inner(u,n)+abs(inner(u,n)))*u
+            else:
+                uflux_ext = 0.5*(inner(u,n)+abs(inner(u,n)))*u + 0.5*(inner(u,n)-abs(inner(u,n)))*g
+            return advect * dot(v,uflux_ext)*ds(bid)
+
+        exterior_markers = list(self.mesh.exterior_facets.unique_markers)
+        for bc in self.bcs:
+            if "DG" in str(bc._function_space):
+                continue
+            g = bc.function_arg
+            bid = bc.sub_domain
+            exterior_markers.remove(bid)
+            F += a_bc(u, v, bid, g, form_="cr")
+            F += c_bc(u, v, bid, g, advect)
+        for bid in exterior_markers:
+            F += c_bc(u, v, bid, None, advect)
+        return F
+
+    def get_transfers(self):
+        V = self.Z.sub(self.velocity_id)
+        dgtransfer = DGInjection()
+        transfers = {VectorElement("DG", V.mesh().ufl_cell(), V.ufl_element().degree()): (dgtransfer.prolong, restrict, dgtransfer.inject)}
+        return transfers
+
+    def configure_patch_solver(self, opts):
+        opts["patch_pc_patch_sub_mat_type"] = "seqdense"
+        opts["patch_sub_pc_factor_mat_solver_type"] = "petsc"
+        opts["pc_python_type"] = "matpatch.MatPatch"
+
+    def distribution_parameters(self):
+        return {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 1)}
+
+class RTSolver(HdivSolver):
+
+    def function_space(self, mesh, k):
+        eleth = FiniteElement("CG", mesh.ufl_cell(), k)
+        if self.tdim == 2:
+            eles = VectorElement("DG", mesh.ufl_cell(), k-1)
+        else:
+            eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=5)
+        eleu = FiniteElement("RT", mesh.ufl_cell(), k, variant="integral")
+        elep = FiniteElement("Discontinuous Lagrange", mesh.ufl_cell(), k-1)
+        if self.formulation_Sup or self.formulation_Lup:
+            Z = FunctionSpace(mesh, MixedElement([eles,eleu,elep]))
+        elif self.formulation_LSup:
+            Z = FunctionSpace(mesh, MixedElement([eles,eles,eleu,elep]))
+        elif self.formulation_up:
+            Z = FunctionSpace(mesh, MixedElement([eleu,elep]))
+        elif self.formulation_TSup:
+            Z = FunctionSpace(mesh, MixedElement([eleth,eles,eleu,elep]))
+        elif self.formulation_Tup:
+            Z = FunctionSpace(mesh, MixedElement([eleth,eleu,elep]))
+        return Z
+
+
+class BDMSolver(HdivSolver):
+
+    def function_space(self, mesh, k):
+        eleth = FiniteElement("CG", mesh.ufl_cell(), k)
+        if self.tdim == 2:
+            eles = VectorElement("DG", mesh.ufl_cell(), k-1)
+        else:
+            eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=5)
+        eleu = FiniteElement("BDM", mesh.ufl_cell(), k, variant="integral")
+        elep = FiniteElement("Discontinuous Lagrange", mesh.ufl_cell(), k-1)
+        if self.formulation_Sup or self.formulation_Lup:
+            Z = FunctionSpace(mesh, MixedElement([eles,eleu,elep]))
+        elif self.formulation_LSup:
+            Z = FunctionSpace(mesh, MixedElement([eles,eles,eleu,elep]))
+        elif self.formulation_up:
+            Z = FunctionSpace(mesh, MixedElement([eleu,elep]))
+        elif self.formulation_TSup:
+            Z = FunctionSpace(mesh, MixedElement([eleth,eles,eleu,elep]))
+        elif self.formulation_Tup:
+            Z = FunctionSpace(mesh, MixedElement([eleth,eleu,elep]))
+        return Z

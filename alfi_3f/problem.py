@@ -17,6 +17,12 @@ class NonNewtonianProblem(NavierStokesProblem):
     def const_rel_picard(self, *args):
         raise NotImplementedError
 
+    def explicit_cr(self, U):
+        if "r" not in self.const_rel_params.keys(): r = Constant(2.0)
+        if "eps" not in self.const_rel_params.keys(): eps = Constant(0.0)
+        q = 2.* self.nu * pow(self.eps**2 + inner(U,U), (float(self.r)-2.)/2.0)*U
+        return q
+
 class NonNewtonianProblem_Sup(NonNewtonianProblem):
     def __init__(self, **const_rel_params):
         super().__init__(**const_rel_params)
