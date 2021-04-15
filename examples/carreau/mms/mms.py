@@ -9,6 +9,9 @@ import numpy as np
 #import inflect
 #eng = inflect.engine()
 
+from firedrake.petsc import PETSc
+PETSc.Sys.popErrorHandler()
+
 convergence_orders = lambda x: np.log2(np.array(x)[:-1] / np.array(x)[1:])
 
 parser = get_default_parser()
@@ -54,7 +57,7 @@ elif args.variation == "nu":
     if args.fields in ["up", "Sup"] and args.discretisation in ["rt1p0", "rt1p0"]:
         r_s = [2.0]
     else:
-        r_s = [2.0] #1.8,2.5
+        r_s = [2.0, 1.8] #1.8,2.5
     r = Constant(r_s[0])
     #Viscosities
     nu_s = []
