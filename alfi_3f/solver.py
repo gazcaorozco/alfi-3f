@@ -1208,8 +1208,8 @@ class ConformingSolver(NonNewtonianSolver):
                         - inner(G,ST) * dx
                         - (self.Br/self.Pe) * inner(inner(S,sym(grad(u))), theta_) * dx
                         )
-
         return F
+#        return inner(G, sym(grad(v)))*dx + Constant(0.)*inner(dot(grad(u),u), v)*dx - p*div(v)*dx - q*div(u)*dx + self.gamma*inner(div(u),div(v))*dx
 
 class ScottVogeliusSolver(ConformingSolver):
 
@@ -1254,7 +1254,7 @@ class ScottVogeliusSolver(ConformingSolver):
             raise ValueError("Unknown stabilisation")
         self.qtransfer = qtransfer
 
-        if self.hierarchy == "bary":   #FIXME: if this is not the case then vtransfer is not defined (although for SV it doesn't matter...)
+        if self.hierarchy == "bary":
             vtransfer = SVSchoeberlTransfer((self.nu, self.gamma), self.tdim, self.hierarchy)
             self.vtransfer = vtransfer
 

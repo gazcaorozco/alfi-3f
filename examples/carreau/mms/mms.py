@@ -1,6 +1,6 @@
 from pprint import pprint
-from mms2d import CarreauMMS_up, CarreauMMS_Sup
-from mms3d import CarreauMMS3D_up, CarreauMMS3D_Sup
+from mms2d import CarreauMMS_up, CarreauMMS_Sup, CarreauMMS_Lup, CarreauMMS_LSup
+from mms3d import CarreauMMS3D_up, CarreauMMS3D_Sup, CarreauMMS3D_Lup, CarreauMMS3D_LSup
 from alfi_3f import get_default_parser, get_solver, run_solver
 import os
 
@@ -15,60 +15,74 @@ parser = get_default_parser()
 parser.add_argument("--dim", type=int, required=True,
                     choices=[2, 3])
 parser.add_argument("--fields", type=str, default="Sup",
-                        choices=["Sup", "up"])
+                        choices=["Sup", "up", "Lup", "LSup"])
+parser.add_argument("--variation", type=str, default="nu",
+                        choices=["nu", "r"])
 args, _ = parser.parse_known_args()
 
-#Constitutive parameters (to study variations in r)
-nu_s = [0.5]
-nu = Constant(nu_s[0])
-epss = [1e-4]
-eps = Constant(epss[0])
-r_s = []   ##The errors will be computed for the last element in each list
-#Shear-thickenning
-r_s1 = [2.0]; r_s.append(r_s1)
-r_s2 = [2.7]; r_s.append(r_s2)
-r_s3 = [3.5]; r_s.append(r_s3)
-##Shear-thinning
-#r_s1 = [2.0]; r_s.append(r_s1)
-#r_s2 = [1.8]; r_s.append(r_s2)
-#r_s3 = [1.6]; r_s.append(r_s3)
-r = Constant(r_s[0][0])
+if args.fields in ["up", "Sup"] and args.discretisation in ["rt1p0", "rt1p0"]:
+    args.variation = "nu"
 
-const_params_list = [{"nu": nu_s, "eps": epss, "r": r_s[0]}]
-for rr in r_s[1:]:
-    const_params_list.append({"nu": [nu_s[-1]], "eps": [epss[-1]], "r": rr})
-params_to_check = {"r": [a[-1] for a in r_s]}
-print("params_to_check: ", params_to_check)
+if args.variation == "r":
+    #Constitutive parameters (to study variations in r)
+    nu_s = [0.5]
+    nu = Constant(nu_s[0])
+    epss = [1e-4]
+    eps = Constant(epss[0])
+    r_s = []   ##The errors will be computed for the last element in each list
+    #Shear-thickenning
+    r_s1 = [2.0]; r_s.append(r_s1)
+    r_s2 = [2.7]; r_s.append(r_s2)
+    r_s3 = [3.5]; r_s.append(r_s3)
+    ##Shear-thinning
+    #r_s1 = [2.0]; r_s.append(r_s1)
+    #r_s2 = [1.8]; r_s.append(r_s2)
+    #r_s3 = [1.6]; r_s.append(r_s3)
+    r = Constant(r_s[0][0])
 
-##Constitutive parameters (to study variations in nu)
-#epss = [1e-4]
-#eps = Constant(epss[0])
-##Power-law exponent
-#r_s = [2.0] #1.8,2.5
-#r = Constant(r_s[0])
-##Viscosities
-#nu_s = []
-#Res1 = [1]; nu_s1 = [1./re for re in Res1]; nu_s.append(nu_s1)
-#Res2 = [9, 10]; nu_s2 = [1./re for re in Res2]; nu_s.append(nu_s2)
-#Res3 = [50, 90, 100]; nu_s3 = [1./re for re in Res3]; nu_s.append(nu_s3)
-#Res4 = [400, 500, 900, 1000]; nu_s4 = [1./re for re in Res4]; nu_s.append(nu_s4)
-#nu = Constant(nu_s[0][0])
-#
-#const_params_list = [{"eps": epss, "r": r_s, "nu": nu_s[0]}]
-#for nu_ in nu_s[1:]:
-#    const_params_list.append({"eps": [epss[-1]], "r": [r_s[-1]], "nu": nu_})
-#params_to_check = {"nu": [a[-1] for a in nu_s]}
-#print("params_to_check: ", params_to_check)
+    const_params_list = [{"nu": nu_s, "eps": epss, "r": r_s[0]}]
+    for rr in r_s[1:]:
+        const_params_list.append({"nu": [nu_s[-1]], "eps": [epss[-1]], "r": rr})
+    params_to_check = {"r": [a[-1] for a in r_s]}
+    print("params_to_check: ", params_to_check)
+
+elif args.variation == "nu":
+    #Constitutive parameters (to study variations in nu)
+    epss = [1e-4]
+    eps = Constant(epss[0])
+    #Power-law exponent
+    if args.fields in ["up", "Sup"] and args.discretisation in ["rt1p0", "rt1p0"]:
+        r_s = [2.0]
+    else:
+        r_s = [2.0] #1.8,2.5
+    r = Constant(r_s[0])
+    #Viscosities
+    nu_s = []
+    Res1 = [1]; nu_s1 = [1./re for re in Res1]; nu_s.append(nu_s1)
+    Res2 = [9, 10]; nu_s2 = [1./re for re in Res2]; nu_s.append(nu_s2)
+    Res3 = [50, 90, 100]; nu_s3 = [1./re for re in Res3]; nu_s.append(nu_s3)
+    Res4 = [400, 500, 900, 1000]; nu_s4 = [1./re for re in Res4]; nu_s.append(nu_s4)
+    nu = Constant(nu_s[0][0])
+
+    const_params_list = [{"eps": epss, "r": r_s, "nu": nu_s[0]}]
+    for nu_ in nu_s[1:]:
+        const_params_list.append({"eps": [epss[-1]], "r": [r_s[-1]], "nu": nu_})
+    params_to_check = {"nu": [a[-1] for a in nu_s]}
+    print("params_to_check: ", params_to_check)
 
 
 var_problem = {
     2: {
         "up": CarreauMMS_up,
         "Sup": CarreauMMS_Sup,
+        "Lup": CarreauMMS_Lup,
+        "LSup": CarreauMMS_LSup,
     },
     3: {
         "up": CarreauMMS3D_up,
         "Sup": CarreauMMS3D_Sup,
+        "Lup": CarreauMMS3D_Lup,
+        "LSup": CarreauMMS3D_LSup,
     }
 }[args.dim][args.fields]
 problem_ = var_problem(baseN=args.baseN, r=r, nu=nu, eps=eps)
@@ -83,7 +97,7 @@ hs = []
 for nref in range(1, args.nref+1):
     args.nref = nref
     solver_ = get_solver(args, problem_)
-    solver_.gamma.assign(0.)
+#    solver_.gamma.assign(0.)
 
 #    #Solve a Stokes problem first and use as initial guess
 #    problem_.interpolate_initial_guess(solver_.z)
@@ -108,8 +122,14 @@ for nref in range(1, args.nref+1):
         if args.fields == "up":
             u, p = z.split()
             S = problem_.const_rel(sym(grad(u)))
-        else:
+        elif args.fields == "Sup":
             SS, u, p = z.split()
+            S = solver_.stress_to_matrix(SS)
+        elif args.fields == "Lup":
+            _, u, p = z.split()
+            S = problem_.const_rel(sym(grad(u)))
+        elif args.fields == "LSup":
+            _, SS, u, p = z.split()
             S = solver_.stress_to_matrix(SS)
         S_F = problem_.quasi_norm(sym(grad(u)))
         pintegral = assemble(p*dx)
@@ -168,6 +188,15 @@ if comm.rank == 0:
         print("convergence orders:", convergence_orders(results[Ra]["quasi-norm"]))
     print("gamma =", args.gamma)
     print("h =", hs)
+
+##Test plot
+#u.rename("Velocity")
+#p.rename("Pressure")
+##u_ee = interpo(problem_.exact_velocity(Z), VectorFunctionSpace(mesh, "CG", 3))
+#u_ee = Function(VectorFunctionSpace(mesh, "CG", 3)).interpolate(problem_.exact_velocity(Z))
+#u_ee.rename("exact_vel")
+#File("plot_test/plot_alfi3f.pvd").write(u,p,u_ee)
+
 
 #    for Ra in params_to_check:
 #        print("%%Ra = %i" % Ra)
