@@ -23,7 +23,7 @@ parser.add_argument("--variation", type=str, default="nu",
                         choices=["nu", "r"])
 args, _ = parser.parse_known_args()
 
-if args.fields in ["up", "Sup"] and args.discretisation in ["rt1p0", "rt1p0"]:
+if args.fields in ["up", "Sup"] and args.discretisation in ["bdm1p0", "rt1p0"]:
     args.variation = "nu"
 
 if args.variation == "r":
@@ -54,7 +54,7 @@ elif args.variation == "nu":
     epss = [1e-4]
     eps = Constant(epss[0])
     #Power-law exponent
-    if args.fields in ["up", "Sup"] and args.discretisation in ["rt1p0", "rt1p0"]:
+    if args.fields in ["up", "Sup"] and args.discretisation in ["bdm1p0", "rt1p0"]:
         r_s = [2.0]
     else:
         r_s = [2.0, 1.8] #1.8,2.5

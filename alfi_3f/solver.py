@@ -886,10 +886,10 @@ class NonNewtonianSolver(object):
             "fieldsplit_1": fieldsplit_1,
         }
 
-        if self.formulation_Sup or self.formulation_Tup:
+        if self.formulation_Sup or self.formulation_Tup or self.formulation_Lup:
             outer_fieldsplit["pc_fieldsplit_0_fields"] = "0,1"
             outer_fieldsplit["pc_fieldsplit_1_fields"] = "2"
-        if self.formulation_TSup:
+        if self.formulation_TSup or self.formulation_LSup:
             outer_fieldsplit["pc_fieldsplit_0_fields"] = "0,1,2"
             outer_fieldsplit["pc_fieldsplit_1_fields"] = "3"
 
@@ -1608,7 +1608,8 @@ class HDivSolver(NonNewtonianSolver):
     def configure_patch_solver(self, opts):
         opts["patch_pc_patch_sub_mat_type"] = "seqdense"
         opts["patch_sub_pc_factor_mat_solver_type"] = "petsc"
-        opts["pc_python_type"] = "matpatch.MatPatch"
+        opts["pc_python_type"] = "firedrake.ASMStarPC"
+        opts["pc_star_backend"] = "tinyasm"
 
     def distribution_parameters(self):
         return {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 1)}
