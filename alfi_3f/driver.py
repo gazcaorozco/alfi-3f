@@ -18,7 +18,8 @@ def get_default_parser():
     parser.add_argument("--nref", type=int, default=1)
     parser.add_argument("--baseN", type=int, default=16)
     parser.add_argument("--k", type=int, default=2)
-    parser.add_argument("--stabilisation-weight", type=float, default=None)
+    parser.add_argument("--stabilisation-weight-u", type=float, default=None)
+    parser.add_argument("--stabilisation-weight-t", type=float, default=None)
     parser.add_argument("--solver-type", type=str, default="almg",
                         choices=["lu", "allu", "almg", "aljacobi", "alamg", "simple"])#, "lu-reg", "lu-p1"])
     parser.add_argument("--patch", type=str, default="macro",
@@ -27,8 +28,10 @@ def get_default_parser():
                         choices=["additive", "multiplicative"])
     parser.add_argument("--mh", type=str, default="bary",
                         choices=["uniform", "bary", "uniformbary"])
-    parser.add_argument("--stabilisation-type", type=str, default=None,
-                        choices=["none", "burman", "gls", "supg"]) #"supg-temp"
+    parser.add_argument("--stabilisation-type-u", type=str, default=None,
+                        choices=["none", "burman", "gls", "supg"])
+    parser.add_argument("--stabilisation-type-t", type=str, default=None,
+                        choices=["none", "burman"])
     parser.add_argument("--linearisation", type=str, default="newton",
                         choices=["newton", "picard", "kacanov"]) #kacanov=full Picard #TODO: "regularised"
     parser.add_argument("--thermal-conv", type=str, default="none",
@@ -162,7 +165,8 @@ def get_solver(args, problem, hierarchy_callback=None):
     solver = solver_t(
         problem,
         solver_type=args.solver_type,
-        stabilisation_type=args.stabilisation_type,
+        stabilisation_type_u=args.stabilisation_type_u,
+        stabilisation_type_t=args.stabilisation_type_t,
         linearisation=args.linearisation,
         nref=args.nref,
         k=args.k,
@@ -170,7 +174,7 @@ def get_solver(args, problem, hierarchy_callback=None):
         patch=args.patch,
         use_mkl=args.mkl,
         supg_method="shakib",
-        stabilisation_weight=args.stabilisation_weight,
+        stabilisation_weight_u=args.stabilisation_weight_u,
         hierarchy=args.mh,
         patch_composition=args.patch_composition,
         thermal_conv=args.thermal_conv,

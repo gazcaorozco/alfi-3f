@@ -3,9 +3,10 @@ from firedrake.petsc import *
 import numpy as np
 from mpi4py import MPI
 
-from alfi.stabilisation import *
+#from alfi.stabilisation import *
 from alfi.transfer import *
 
+from alfi_3f.stabilisation import BurmanStabilisation
 from alfi_3f.transfer import DGInjection
 
 import pprint
@@ -28,17 +29,20 @@ class NonNewtonianSolver(object):
         raise NotImplementedError
 
     def __init__(self, problem, nref=1, solver_type="almg",
-                 stabilisation_type=None,
+                 stabilisation_type_u=None, stabilisation_type_t=None,
                  supg_method="shakib", supg_magic=9.0, gamma=10000, k=3,
-                 patch="macro", hierarchy="bary", use_mkl=False, stabilisation_weight=None,
+                 patch="macro", hierarchy="bary", use_mkl=False, stabilisation_weight_u=None, stabilisation_weight_t=None,
                  patch_composition="additive", restriction=False, smoothing=None, cycles=None,
                  rebalance_vertices=False, hierarchy_callback=None, high_accuracy=False, thermal_conv="none",
                  linearisation = "newton", low_accuracy = False, no_convection = False, exactly_div_free = True):
 
         assert solver_type in {"almg", "allu", "lu", "aljacobi", "alamg", "simple"}, "Invalid solver type %s" % solver_type
-        if stabilisation_type == "none":
-            stabilisation_type = None
-        assert stabilisation_type in {None, "gls", "supg", "burman", "burman-temp"}, "Invalid stabilisation type %s" % stabilisation_type  #"supg-temp"
+        if stabilisation_type_u == "none":
+            stabilisation_type_u = None
+        if stabilisation_type_t == "none":
+            stabilisation_type_t = None
+        assert stabilisation_type_u in {None, "gls", "supg", "burman"}, "Invalid stabilisation type %s" % stabilisation_type_u
+        assert stabilisation_type_t in {None, "burman"}, "Invalid stabilisation type %s" % stabilisation_type_t
         assert hierarchy in {"uniform", "bary", "uniformbary"}, "Invalid hierarchy type %s" % hierarchy
         assert patch in {"macro", "star"}, "Invalid patch type %s" % patch
         assert linearisation in {"newton", "picard", "kacanov"}, "Invalid linearisation type %s" % linearisation
@@ -51,7 +55,8 @@ class NonNewtonianSolver(object):
         self.problem = problem
         self.nref = nref
         self.solver_type = solver_type
-        self.stabilisation_type = stabilisation_type
+        self.stabilisation_type_u = stabilisation_type_u
+        self.stabilisation_type_t = stabilisation_type_t
         self.patch = patch
         self.use_mkl = use_mkl
         self.patch_composition = patch_composition
@@ -199,6 +204,7 @@ class NonNewtonianSolver(object):
         u = fields["u"]
         v = fields["v"]
         q = fields["q"]
+        theta = fields["theta"]
         theta_ = fields.get("theta_")
 
         bcs = problem.bcs(Z)
@@ -225,11 +231,10 @@ class NonNewtonianSolver(object):
 
         F = self.residual()
 
-        if not(self.stabilisation_type  in ["burman", "burman-temp", None]): raise NotImplementedError("That is not a valid stabilisation")
-        """ Stabilisation (for Scott-Vogelius we only use 'burman for the velocity')"""
+        """ Velocity Stabilisation (for Scott-Vogelius we only use 'burman for the velocity')"""
         wind = split(self.z_last)[self.velocity_id]
         rhs = problem.rhs(Z)
-        if self.stabilisation_type in ["gls", "supg"]:
+        if self.stabilisation_type_u in ["gls", "supg"]:
         #    if supg_method == "turek": #FIXME Check this...
         #        self.stabilisation = TurekSUPG(self.Re, self.Z.sub(self.velocity_id), state=u, h=problem.mesh_size(u), magic=supg_magic, weight=stabilisation_weight)
         #    elif supg_method == "shakib":
@@ -255,22 +260,25 @@ class NonNewtonianSolver(object):
         #    else:
         #        raise NotImplementedError
             raise NotImplementedError
-        elif self.stabilisation_type in ["burman", "burman-temp"]:
-            self.stabilisation = BurmanStabilisation(self.Z.sub(self.velocity_id), state=u, h=problem.mesh_size(u, "facet"), weight=stabilisation_weight)
-            self.stabilisation_form = self.stabilisation.form(u, v)
-            self.stabilisation_temp_form = None
-            if self.stabilisation_type == "burman-temp":
-                self.stabilisation_temp = BurmanStabilisation(self.Z.sub(self.temperature_id), state=theta, h=problem.mesh_size(theta, "facet"), weight=stabilisation_weight)
-                self.stabilisation_temp_form = self.stabilisation_temp.form(theta, theta_)
+        elif self.stabilisation_type_u in ["burman"]:
+            self.stabilisation_vel = BurmanStabilisation(self.Z, wind_id=self.velocity_id, state=z, h=problem.mesh_size(u, "facet"), weight=stabilisation_weight_u)
+            self.stabilisation_form_u = self.stabilisation_vel.form(u, v)
         else:
-            self.stabilisation = None
-            self.stabilisation_form = None
-            self.stabilisation_temp_form = None
+            self.stabilisation_vel = None
+            self.stabilisation_form_u = None
 
-        if self.stabilisation_form is not None:
-            F += (self.advect * self.stabilisation_form)
-        if self.stabilisation_temp_form is not None:
-            F += self.stabilisation_temp_form
+        #Temperature stabilisation
+        if self.stabilisation_type_t == "burman":
+                self.stabilisation_temp = BurmanStabilisation(self.Z, wind_id=self.velocity_id, state=z, h=problem.mesh_size(theta, "facet"), weight=stabilisation_weight_t)
+                self.stabilisation_form_t = self.stabilisation_temp.form(theta, theta_)
+        else:
+            self.stabilisation_temp = None
+            self.stabilisation_form_t = None
+
+        if self.stabilisation_form_u is not None:
+            F += (self.advect * self.stabilisation_form_u)
+        if self.stabilisation_form_t is not None:
+            F += self.stabilisation_form_t
 
         if rhs is not None:
             if self.formulation_up or self.formulation_Sup or self.formulation_LSup or self.formulation_Lup: #Assumes the equations for S and L do NOT have right-hand-sides
@@ -601,8 +609,10 @@ class NonNewtonianSolver(object):
             self.advect.assign(1)
         self.advect.assign(1)
 
-        if self.stabilisation is not None:
-            self.stabilisation.update(self.z.split()[self.velocity_id])
+        if self.stabilisation_vel is not None:
+            self.stabilisation_vel.update(self.z.split()[self.velocity_id])
+        if self.stabilisation_temp is not None:
+            self.stabilisation_temp.update(self.z.split()[self.velocity_id])
 
         start = datetime.now()
         self.solver.solve()
@@ -1166,9 +1176,9 @@ class ScottVogeliusSolver(ConformingSolver):
         if self.formulation_Tup or self.formulation_TSup:
             V_temp = self.Z.sub(self.temperature_id)
 
-        if self.stabilisation_type in ["burman", "burman-temp", "supg-temp", None]:
+        if self.stabilisation_type_u in ["burman", None]:
             qtransfer = NullTransfer()
-        elif self.stabilisation_type in ["gls", "supg"]:
+        elif self.stabilisation_type_u in ["gls", "supg"]:
             qtransfer = EmbeddedDGTransfer(Q.ufl_element())
         else:
             raise ValueError("Unknown stabilisation")
@@ -1321,12 +1331,12 @@ class P1P0Solver(ScottVogeliusSolver):
             stransfer = DGInjection()
             self.stransfer = stransfer
 
-        if self.stabilisation_type in ["burman", "burman-temp", "supg-temp", None]: #TODO: Check this...
-            qtransfer = NullTransfer()
-        elif self.stabilisation_type in ["gls", "supg"]:
-            qtransfer = EmbeddedDGTransfer(Q.ufl_element())
-        else:
-            raise ValueError("Unknown stabilisation")
+        #if self.stabilisation_type_u in ["burman", "burman-temp", "supg-temp", None]: #TODO: Check this...
+        qtransfer = NullTransfer()
+        #elif self.stabilisation_type_u in ["gls", "supg"]:
+        #    qtransfer = EmbeddedDGTransfer(Q.ufl_element())
+        #else:
+        #    raise ValueError("Unknown stabilisation")
         self.qtransfer = qtransfer
 
 
