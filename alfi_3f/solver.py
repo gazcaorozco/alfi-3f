@@ -6,7 +6,7 @@ from mpi4py import MPI
 #from alfi.stabilisation import *
 from alfi.transfer import *
 
-from alfi_3f.stabilisation import BurmanStabilisation
+from alfi_3f.stabilisation import *
 from alfi_3f.transfer import DGInjection
 
 import pprint
@@ -30,7 +30,7 @@ class NonNewtonianSolver(object):
 
     def __init__(self, problem, nref=1, solver_type="almg",
                  stabilisation_type_u=None, stabilisation_type_t=None,
-                 supg_method="shakib", supg_magic=9.0, gamma=10000, k=3,
+                 supg_method_u="shakib", supg_method_t="shakib", supg_magic=9.0, gamma=10000, k=3,
                  patch="macro", hierarchy="bary", use_mkl=False, stabilisation_weight_u=None, stabilisation_weight_t=None,
                  patch_composition="additive", restriction=False, smoothing=None, cycles=None,
                  rebalance_vertices=False, hierarchy_callback=None, high_accuracy=False, thermal_conv="none",
@@ -204,7 +204,7 @@ class NonNewtonianSolver(object):
         u = fields["u"]
         v = fields["v"]
         q = fields["q"]
-        theta = fields["theta"]
+        theta = fields.get("theta")
         theta_ = fields.get("theta_")
 
         bcs = problem.bcs(Z)
@@ -231,38 +231,31 @@ class NonNewtonianSolver(object):
 
         F = self.residual()
 
-        """ Velocity Stabilisation (for Scott-Vogelius we only use 'burman for the velocity')"""
+        """ Velocity Stabilisation (for Scott-Vogelius 'burman' seems to be best)"""
         wind = split(self.z_last)[self.velocity_id]
         rhs = problem.rhs(Z)
         if self.stabilisation_type_u in ["gls", "supg"]:
-        #    if supg_method == "turek": #FIXME Check this...
-        #        self.stabilisation = TurekSUPG(self.Re, self.Z.sub(self.velocity_id), state=u, h=problem.mesh_size(u), magic=supg_magic, weight=stabilisation_weight)
-        #    elif supg_method == "shakib":
-        #        self.stabilisation = ShakibHughesZohanSUPG(self.Re, self.Z.sub(self.velocity_id),state=u, h=problem.mesh_size(u, "cell"), magic=supg_magic, weight=stabilisation_weight)
-        #    else:
-        #        raise NotImplementedError
+            if supg_method_u == "turek":
+                self.stabilisation_vel = TurekSUPG(1./self.nu, self.Z, wind_id=self.velocity_id, magic=supg_magic, h=problem.mesh_size(u), state=z, weight=stabilisation_weight_u)
+            elif supg_method_u == "shakib":
+                self.stabilisation_vel = ShakibHughesZohanSUPG(1./self.nu, self.Z, wind_id=self.velocity_id, magic=supg_magic, h=problem.mesh_size(u, "cell"), state=z, weight=stabilisation_weight_u)
+            else:
+                raise NotImplementedError
 
-        #    Lu = -nu * div(2*sym(grad(u))) + dot(grad(u), u) + grad(p)
-        #    Lv = -nu * div(2*sym(grad(v))) + dot(grad(v), wind) + grad(q)
-        #    Lu0 = -nu * div(2*sym(grad(u0))) + dot(grad(u0), u0) + grad(p)
-        #    if rhs is not None:
-        #        if self.formulation_up or self.formulation_Sup or self.formulation_LSup:
-        #            Lu -= rhs[0]
-        #        elif self.formulation_Tup or self.formulation_TSup:
-        #            Lu -= rhs[1]
-        #    k = Z.sub(self.velocity_id).ufl_element().degree()
-        #    if self.stabilisation_type == "gls":
-        #        self.stabilisation_form = self.stabilisation.form_gls(Lu, Lv, dx(degree=2*k))
-        #        self.stabilisation_form0 = self.stabilisation.form_gls(Lu0, Lv, dx(degree=2*k))
-        #    elif self.stabilisation_type == "supg":
-        #        self.stabilisation_form = self.stabilisation.form(Lu, v, dx(degree=2*k))
-        #        self.stabilisation_form0 = self.stabilisation.form(Lu0, v, dx(degree=2*k))
-        #    else:
-        #        raise NotImplementedError
-            raise NotImplementedError
+            Lu, Lv = self.strong_residual(self.z, wind, rhs)
+            k = Z.sub(self.velocity_id).ufl_element().degree()
+            if self.stabilisation_type_u == "gls":
+                self.message( RED % "CAUTION:  The GLS stabilisation has been implemented for Newtonian flow only!!!")
+                self.stabilisation_form_u = self.stabilisation_vel.form_gls(Lu, Lv, dx(degree=2*k))
+            elif self.stabilisation_type_u == "supg":
+                self.stabilisation_form_u = self.stabilisation_vel.form(Lu, v, dx(degree=2*k))
+            else:
+                raise NotImplementedError
+
         elif self.stabilisation_type_u in ["burman"]:
             self.stabilisation_vel = BurmanStabilisation(self.Z, wind_id=self.velocity_id, state=z, h=problem.mesh_size(u, "facet"), weight=stabilisation_weight_u)
             self.stabilisation_form_u = self.stabilisation_vel.form(u, v)
+
         else:
             self.stabilisation_vel = None
             self.stabilisation_form_u = None
@@ -577,6 +570,39 @@ class NonNewtonianSolver(object):
                 (S_1,S_2,S_3,S_4,S_5,S_6) = split(S_)
                 S = as_tensor(((S_1,S_2,S_3),(S_2,S_5,S_4),(S_3,S_4,S_6)))
         return S
+
+    def strong_residual(self, z, wind, rhs=None, type="momentum"):
+        fields = self.split_variables(z)
+        if rhs is not None:
+            if self.formulation_up or self.formulation_Sup or self.formulation_LSup:
+                rhs_u = rhs[0]
+            elif self.formulation_Tup or self.formulation_TSup:
+                rhs_theta = rhs[0]
+                rhs_u = rhs[1]
+        if type == "momentum":
+            u = fields["u"]
+            v = fields["v"]
+            p = fields["p"]
+            q = fields["q"]
+            if self.formulation_up or self.formulation_Lup:
+                S = self.problem.const_rel(sym(grad(u)))
+                ST = self.problem.const_rel(sym(grad(v)))
+            elif self.formulation_Tup:
+                theta = fields["theta"]
+                theta_ = fields["theta_"]
+                S = self.problem.const_rel(sym(grad(u)), theta)
+                ST = self.problem.const_rel(sym(grad(v)), theta)  #FIXME: Assumes Newtonian relation
+            else:
+                S = fields["S"]
+                ST = fields["ST"]
+            LL = -div(grad(u)) + self.advect*dot(grad(u),u) + grad(p)
+            LL_ = -div(2.*self.nu*sym(grad(v))) -self.advect*dot(grad(v), wind) + grad(q)  #TODO: What if linearisation="newton"?
+            if rhs is not None:
+                LL -= rhs_u
+        elif type == "energy":
+            raise NotImplementedError
+
+        return LL, LL_
 
     def solve(self, param, info_param, predictor="trivial"):
         """
@@ -1285,11 +1311,12 @@ class P1P1Solver(TaylorHoodSolver):
         p = fields["p"]
         q = fields["q"]
 
-        #Stabilisation  #TODO: If gls stabilisation is used then we shouldn't add anything...
-        h = CellDiameter(self.mesh)
-        beta = Constant(0.2)
-        delta = beta*h*h
-        F += - delta * inner(self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
+        #Stabilisation
+        if not(self.stabilisation_type_u == "gls"):
+            h = CellDiameter(self.mesh)
+            beta = Constant(0.2)
+            delta = beta*h*h
+            F += - delta * inner(self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
 
         rhs = self.problem.rhs(self.Z)
         if rhs is not None:
