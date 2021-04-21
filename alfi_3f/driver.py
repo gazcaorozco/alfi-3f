@@ -31,7 +31,7 @@ def get_default_parser():
     parser.add_argument("--stabilisation-type-u", type=str, default=None,
                         choices=["none", "burman", "gls", "supg"])
     parser.add_argument("--stabilisation-type-t", type=str, default=None,
-                        choices=["none", "burman"])
+                        choices=["none", "supg", "burman"])
     parser.add_argument("--linearisation", type=str, default="newton",
                         choices=["newton", "picard", "kacanov"]) #kacanov=full Picard #TODO: "regularised"
     parser.add_argument("--thermal-conv", type=str, default="none",

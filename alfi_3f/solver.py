@@ -42,7 +42,7 @@ class NonNewtonianSolver(object):
         if stabilisation_type_t == "none":
             stabilisation_type_t = None
         assert stabilisation_type_u in {None, "gls", "supg", "burman"}, "Invalid stabilisation type %s" % stabilisation_type_u
-        assert stabilisation_type_t in {None, "burman"}, "Invalid stabilisation type %s" % stabilisation_type_t
+        assert stabilisation_type_t in {None, "supg", "burman"}, "Invalid stabilisation type %s" % stabilisation_type_t
         assert hierarchy in {"uniform", "bary", "uniformbary"}, "Invalid hierarchy type %s" % hierarchy
         assert patch in {"macro", "star"}, "Invalid patch type %s" % patch
         assert linearisation in {"newton", "picard", "kacanov"}, "Invalid linearisation type %s" % linearisation
@@ -86,6 +86,7 @@ class NonNewtonianSolver(object):
         self.formulation_TSup = (self.formulation == "T-S-u-p")
         self.formulation_Tup = (self.formulation == "T-u-p")
         self.formulation_has_stress = self.formulation_Sup or self.formulation_LSup or self.formulation_TSup
+        if self.stabilisation_type_u == "gls": assert formulation_up or formulation_Tup, "GLS stabilisation has not implemented for formulations including the stress"
         if (self.formulation_Tup or self.formulation_TSup): assert not(self.thermal_conv is None), "You have to choose the convection regime (natural or forced)"
         def rebalance(dm, i):
             if rebalance_vertices:
@@ -235,10 +236,21 @@ class NonNewtonianSolver(object):
         wind = split(self.z_last)[self.velocity_id]
         rhs = problem.rhs(Z)
         if self.stabilisation_type_u in ["gls", "supg"]:
+            #Define the parameter that causes dominant convection as it grows (should we use an effective viscosity for this?)
+            if self.formulation_Tup or self.formulation_TSup:
+                if self.thermal_conv in ["natural_Ra", "natural_Ra2"]:
+                    supg_diffusion_parameter_u = self.Ra/self.Pr
+                elif self.thermal_conv == "natural_Gr":
+                    supg_diffusion_parameter_u = sqrt(self.Gr)
+                elif self.thermal_conv == "forced":
+                    supg_diffusion_parameter_u = self.Re
+            else:
+                supg_diffusion_parameter_u = 1./self.nu
+
             if supg_method_u == "turek":
-                self.stabilisation_vel = TurekSUPG(1./self.nu, self.Z, wind_id=self.velocity_id, magic=supg_magic, h=problem.mesh_size(u), state=z, weight=stabilisation_weight_u)
+                self.stabilisation_vel = TurekSUPG(supg_diffusion_parameter_u, self.Z, wind_id=self.velocity_id, magic=supg_magic, h=problem.mesh_size(u), state=z, weight=stabilisation_weight_u)
             elif supg_method_u == "shakib":
-                self.stabilisation_vel = ShakibHughesZohanSUPG(1./self.nu, self.Z, wind_id=self.velocity_id, magic=supg_magic, h=problem.mesh_size(u, "cell"), state=z, weight=stabilisation_weight_u)
+                self.stabilisation_vel = ShakibHughesZohanSUPG(supg_diffusion_parameter_u, self.Z, wind_id=self.velocity_id, magic=supg_magic, h=problem.mesh_size(u, "cell"), state=z, weight=stabilisation_weight_u)
             else:
                 raise NotImplementedError
 
@@ -261,7 +273,30 @@ class NonNewtonianSolver(object):
             self.stabilisation_form_u = None
 
         #Temperature stabilisation
-        if self.stabilisation_type_t == "burman":
+        if self.stabilisation_type_t in ["supg"]:
+            assert self.formulation_Tup or self.formulation_TSup, "Setting stabilisation-type-t only makes sense for non-isothermal problems..."
+            if self.thermal_conv in ["natural_Ra", "natural_Ra2"]:
+                supg_diffusion_parameter_t = Constant(1.)
+            elif self.thermal_conv == "natural_Gr":
+                supg_diffusion_parameter_t = self.Pr*sqrt(self.Gr)
+            elif self.thermal_conv == "forced":
+                supg_diffusion_parameter_t = self.Pe
+
+            if supg_method_t == "turek":
+                self.stabilisation_temp = TurekSUPG(supg_diffusion_parameter_t, self.Z, wind_id=self.velocity_id, magic=supg_magic, h=problem.mesh_size(u), state=z, field_id=self.temperature_id, weight=stabilisation_weight_t)
+            elif supg_method_t == "shakib":
+                self.stabilisation_temp = ShakibHughesZohanSUPG(supg_diffusion_parameter_t, self.Z, wind_id=self.velocity_id, magic=supg_magic, h=problem.mesh_size(u, "cell"), state=z, field_id=self.temperature_id, weight=stabilisation_weight_u)
+            else:
+                raise NotImplementedError
+
+            Lth, _ = self.strong_residual(self.z, wind, rhs, type="temperature")
+            k_t = Z.sub(self.temperature_id).ufl_element().degree()
+            if self.stabilisation_type_t == "supg":
+                self.stabilisation_form_t = self.stabilisation_temp.form(Lth, theta_, dx(degree=2*k_t))
+            else:
+                raise NotImplementedError
+
+        elif self.stabilisation_type_t == "burman":
                 self.stabilisation_temp = BurmanStabilisation(self.Z, wind_id=self.velocity_id, state=z, h=problem.mesh_size(theta, "facet"), weight=stabilisation_weight_t)
                 self.stabilisation_form_t = self.stabilisation_temp.form(theta, theta_)
         else:
@@ -578,34 +613,32 @@ class NonNewtonianSolver(object):
                 rhs_theta = rhs[0]
                 rhs_u = rhs[1]
 
+        g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
         u = fields["u"]
         v = fields["v"]
         p = fields["p"]
         q = fields["q"]
         theta = fields.get("theta")
         theta_ = fields.get("theta_")
+        D = sym(grad(u))
+        if self.formulation_Lup or self.formulation_up:
+            S = self.problem.const_rel(sym(grad(u)))
+#                ST = self.problem.const_rel(sym(grad(v))) #TODO: gls only works in the Newtonian case
+            ST = 2. * self.nu * sym(grad(v))
+        elif self.formulation_LSup or self.formulation_Sup or self.formulation_TSup:
+            th_flux = self.problem.const_rel_temperature(theta, grad(theta))
+            S = fields["S"]
+            ST = fields["ST"]
+        elif self.formulation_Tup:
+            th_flux = self.problem.const_rel_temperature(theta, grad(theta))
+            S = self.problem.const_rel(sym(grad(u)), theta)
+            ST = 2. * self.nu * sym(grad(v))
+
         if type == "momentum":
-            if self.formulation_up or self.formulation_Lup:
-                S = self.problem.const_rel(sym(grad(u)))
-#                ST = self.problem.const_rel(sym(grad(v)))
-                ST = 2. * self.nu * sym(grad(v))
+            if self.formulation_up or self.formulation_Lup or self.formulation_LSup or self.formulation_Tup:
                 LL = - div(S) + self.advect*dot(grad(u),u) + grad(p)
                 LL_ = -div(ST) + self.advect*dot(grad(v), wind) + grad(q)  #TODO: What if linearisation="newton"?
-            elif self.formulation_LSup or self.formulation_Sup:
-                S = fields["S"]
-                ST = fields["ST"]
-                LL = - div(S) + self.advect*dot(grad(u),u) + grad(p)
-                LL_ = -div(ST) + self.advect*dot(grad(v), wind) + grad(q)
-
             elif self.formulation_Tup or self.formulation_TSup:
-                g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
-                if self.formulation_Tup:
-                    S = self.problem.const_rel(sym(grad(u)), theta)
-    #                ST = self.problem.const_rel(sym(grad(v)), theta)  #FIXME: Assumes isothermal Newtonian relation
-                    ST = 2. * self.nu * sym(grad(v))
-                elif self.formulation_TSup:
-                    S = fields["S"]
-                    ST = fields["ST"]
 
                 if self.thermal_conv == "natural_Ra":
                     LL = - self.Pr*div(S) + self.advect*dot(grad(u),u) + grad(p) - self.Ra*self.Pr*theta*g
@@ -623,8 +656,18 @@ class NonNewtonianSolver(object):
             if rhs is not None:
                 LL -= rhs_u
 
-        elif type == "energy":
-            raise NotImplementedError
+        elif type == "temperature":
+           LL_ = None
+
+           if self.thermal_conv in ["natural_Ra", "natural_Ra2"]:
+               LL = -div(th_flux) + div(theta*u) + self.Di*(theta + self.Theta)*dot(g,u) - (self.Di/self.Ra)*inner(S,D)
+           elif self.thermal_conv == "natural_Gr":
+               LL = -(1./(self.Pr*sqrt(self.Gr)))*div(th_flux) + div(theta*u) + self.Di*(theta + self.Theta)*dot(g,u) - (self.Di/sqrt(self.Gr))*inner(S,D)
+           elif self.thermal_conv == "forced":
+               LL = -(1./self.Pe)*div(th_flux) + div(theta*u) - (self.Br/self.Pe)*inner(S,D)
+
+           if rhs is not None:
+               LL -= rhs_theta
 
         return LL, LL_
 
