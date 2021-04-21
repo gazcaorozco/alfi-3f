@@ -347,6 +347,12 @@ class NonNewtonianSolver(object):
                 G0 = self.problem.const_rel_picard(D, D0)
             elif self.formulation_Tup:
                 G0 = self.problem.const_rel_picard(D, theta, D0)
+                G = self.problem.const_rel(D, theta)
+                print("Here?")
+                JJ= replace(derivative(inner(inner(G,grad(u)), theta_)*dx, self.z), {self.z: w})
+#                replace(inner(u,v)*dx, {self.z: w})
+                print("DONE")
+
             elif self.formulation_LSup:
                 G0 = self.problem.const_rel_picard(S, L, S0, L0)
             elif self.formulation_Lup:
@@ -412,9 +418,9 @@ class NonNewtonianSolver(object):
                     if self.formulation_Tup:
                         J0 += (
                             self.Pr * inner(G0,sym(grad(v)))*dx
-                            - (self.Di/self.Ra) * inner(inner(G0,sym(grad(u))), theta_) * dx
-    #                        - (self.Di/self.Ra) * inner(inner(self.problem.const_rel(D,theta),sym(grad(u0))), theta_) * dx
                             )
+                        #Newton linearisation of the dissipation term (not sure if this is the best way)
+                        J0 -= (self.Di/self.Ra) * derivative(inner(inner(G,sym(grad(u))), theta_)*dx, self.z, w)
                     elif self.formulation_TSup:
                         J0 += (
                             self.Pr * inner(S0,sym(grad(v)))*dx
@@ -432,10 +438,9 @@ class NonNewtonianSolver(object):
                         + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
                         )
                     if self.formulation_Tup:
-                        J0 += (
-                            inner(G0,sym(grad(v)))*dx
-                            - (self.Di/self.Ra) * inner(inner(G0,sym(grad(u))),theta_) * dx #TODO: Newton for this term? Maybe using derivative, and G?
-                            )
+                        J0 += inner(G0,sym(grad(v)))*dx
+                        #Newton linearisation of the dissipation term (not sure if this is the best way)
+                        J0 -= (self.Di/self.Ra) * derivative(inner(inner(G,sym(grad(u))), theta_)*dx, self.z, w)
                     elif self.formulation_TSup:
                         J0 += (
                             inner(S0,sym(grad(v)))*dx
@@ -452,10 +457,9 @@ class NonNewtonianSolver(object):
                         + self.Di * inner((theta + self.Theta)*dot(g, u0), theta_) * dx
                         )
                     if self.formulation_Tup:
-                        J0 += (
-                            (1./sqrt(self.Gr)) * inner(G0,sym(grad(v)))*dx
-                            - (self.Di/sqrt(self.Gr)) * inner(inner(G0,sym(grad(u))),theta_) * dx
-                            )
+                        J0 += (1./sqrt(self.Gr)) * inner(G0,sym(grad(v)))*dx
+                        #Newton linearisation of the dissipation term (not sure if this is the best way)
+                        J0 -= (self.Di/sqrt(self.Gr)) * derivative(inner(inner(G,sym(grad(u))), theta_)*dx, self.z, w)
                     elif self.formulation_TSup:
                         J0 += (
                             (1./sqrt(self.Gr)) * inner(S0,sym(grad(v)))*dx
@@ -476,10 +480,9 @@ class NonNewtonianSolver(object):
                         + (1./self.Pe) * inner(th_flux0, grad(theta_)) * dx
                         )
                     if self.formulation_Tup:
-                        J0 += (
-                            inner(G0,sym(grad(v)))*dx
-                            - (self.Br/self.Pe) * inner(inner(G0,sym(grad(u))), theta_) * dx
-                            )
+                        J0 += inner(G0,sym(grad(v)))*dx
+                        #Newton linearisation of the dissipation term (not sure if this is the best way)
+                        J0 -= (self.Br/self.Pe) * derivative(inner(inner(G,sym(grad(u))), theta_)*dx, self.z, w)
                     elif self.formulation_TSup:
                         J0 += (
                             inner(S0,sym(grad(v)))*dx

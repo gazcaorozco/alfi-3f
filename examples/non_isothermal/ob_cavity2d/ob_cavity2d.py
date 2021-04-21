@@ -3,6 +3,9 @@
 from firedrake import *
 from alfi_3f import *
 
+from firedrake.petsc import PETSc
+PETSc.Sys.popErrorHandler()
+
 class TempViscosityOBCavity_up(NonIsothermalProblem_up):
     def __init__(self, baseN, temp_bcs="left-right", temp_dependent="viscosity", diagonal=None, **params):
         super().__init__(**params)
