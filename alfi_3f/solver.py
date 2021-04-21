@@ -359,7 +359,7 @@ class NonNewtonianSolver(object):
                 G0 = self.problem.const_rel_picard(L0)
 
             if self.formulation_Tup or self.formulation_TSup:
-                th_flux0 = self.problem.const_rel_temperature(theta, grad(theta0))  #Assumes the constitutive relation is linear in the second entry
+                th_flux0 = self.problem.const_rel_temperature(theta, grad(theta0))  #TODO: Assumes the constitutive relation is linear in the second entry
 
             #Common to all formulations
             J0 = (
@@ -582,26 +582,52 @@ class NonNewtonianSolver(object):
             elif self.formulation_Tup or self.formulation_TSup:
                 rhs_theta = rhs[0]
                 rhs_u = rhs[1]
+
+        u = fields["u"]
+        v = fields["v"]
+        p = fields["p"]
+        q = fields["q"]
+        theta = fields.get("theta")
+        theta_ = fields.get("theta_")
         if type == "momentum":
-            u = fields["u"]
-            v = fields["v"]
-            p = fields["p"]
-            q = fields["q"]
             if self.formulation_up or self.formulation_Lup:
                 S = self.problem.const_rel(sym(grad(u)))
-                ST = self.problem.const_rel(sym(grad(v)))
-            elif self.formulation_Tup:
-                theta = fields["theta"]
-                theta_ = fields["theta_"]
-                S = self.problem.const_rel(sym(grad(u)), theta)
-                ST = self.problem.const_rel(sym(grad(v)), theta)  #FIXME: Assumes Newtonian relation
-            else:
+#                ST = self.problem.const_rel(sym(grad(v)))
+                ST = 2. * self.nu * sym(grad(v))
+                LL = - div(S) + self.advect*dot(grad(u),u) + grad(p)
+                LL_ = -div(ST) + self.advect*dot(grad(v), wind) + grad(q)  #TODO: What if linearisation="newton"?
+            elif self.formulation_LSup or self.formulation_Sup:
                 S = fields["S"]
                 ST = fields["ST"]
-            LL = -div(grad(u)) + self.advect*dot(grad(u),u) + grad(p)
-            LL_ = -div(2.*self.nu*sym(grad(v))) -self.advect*dot(grad(v), wind) + grad(q)  #TODO: What if linearisation="newton"?
+                LL = - div(S) + self.advect*dot(grad(u),u) + grad(p)
+                LL_ = -div(ST) + self.advect*dot(grad(v), wind) + grad(q)
+
+            elif self.formulation_Tup or self.formulation_TSup:
+                g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
+                if self.formulation_Tup:
+                    S = self.problem.const_rel(sym(grad(u)), theta)
+    #                ST = self.problem.const_rel(sym(grad(v)), theta)  #FIXME: Assumes isothermal Newtonian relation
+                    ST = 2. * self.nu * sym(grad(v))
+                elif self.formulation_TSup:
+                    S = fields["S"]
+                    ST = fields["ST"]
+
+                if self.thermal_conv == "natural_Ra":
+                    LL = - self.Pr*div(S) + self.advect*dot(grad(u),u) + grad(p) - self.Ra*self.Pr*theta*g
+                    LL_ = - self.Pr*div(ST) + self.advect*dot(grad(v), wind) + grad(q) - self.Ra*self.Pr*theta_*g
+                elif self.thermal_conv == "natural_Ra2":
+                    LL = -div(S) + (self.advect/self.Pr)*dot(grad(u),u) + grad(p) - self.Ra*theta*g
+                    LL_ = -div(ST) + (self.advect/self.Pr)*dot(grad(v), wind) + grad(q) - self.Ra*theta_*g
+                elif self.thermal_conv == "natural_Gr":
+                    LL = -(1./sqrt(self.Gr))*div(S) + self.advect*dot(grad(u),u) + grad(p) - theta*g
+                    LL_ = -(1./sqrt(self.Gr))*div(ST) + self.advect*dot(grad(v), wind) + grad(q) - theta_*g
+                elif self.thermal_conv == "forced":
+                    LL = -div(S) + self.Re*self.advect*dot(grad(u),u) + grad(p)
+                    LL_ = -div(ST) + self.Re*self.advect*dot(grad(v), wind) + grad(q)
+
             if rhs is not None:
                 LL -= rhs_u
+
         elif type == "energy":
             raise NotImplementedError
 
