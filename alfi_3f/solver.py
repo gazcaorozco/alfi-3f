@@ -1367,9 +1367,58 @@ class P1P1Solver(TaylorHoodSolver):
 
             return F
 
-#    def get_jacobian(self):
+    def get_jacobian(self):
 
-#       J0 = super().get_jacobian()
+        J0 = super().get_jacobian()
+        if self.linearisation == "newton" or self.stabilisation_type_u == "gls":
+            return J0  #Already contains the pressure stabilisation
+        else:
+
+            #Split variables for current solution and test function
+            fields = self.split_variables(self.z)
+            u = fields["u"]
+            q = fields["q"]
+            #Split trial function
+            w = TrialFunction(self.Z)
+            fields0 = self.split_variables(w)
+            u0 = fields0["u"]
+            p0 = fields0["p"]
+
+            #Stabilisation (maybe it could be cleaner by using self.strong_residual)
+            h = CellDiameter(self.mesh)
+            beta = Constant(0.2)
+            delta = beta*h*h
+            if self.formulation_Tup or self.formulation_TSup:
+                theta = fields["theta"]
+                theta0 = fields0["theta"]
+                g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
+                if self.thermal_conv == "natural_Ra":
+                    J0 += - delta * inner(self.advect*dot(grad(u0), u) + grad(p0) - self.Ra*self.Pr*theta0*g, grad(q)) * dx
+                elif self.thermal_conv == "natural_Ra2":
+                    J0 += - delta * inner((self.advect/self.Pr)*dot(grad(u0), u) + grad(p0) - self.Ra*theta0*g, grad(q)) * dx
+                elif self.thermal_conv == "natural_Gr":
+                    J0 += - delta * inner(self.advect*dot(grad(u0), u) + grad(p0) - theta0*g, grad(q)) * dx
+                elif self.thermal_conv == "forced":
+                    J0 += - delta * inner(self.Re*self.advect*dot(grad(u0), u) + grad(p0) - theta0*g, grad(q)) * dx
+
+            else:
+                J0 += - delta * inner(self.advect*dot(grad(u0), u) + grad(p0), grad(q)) * dx
+
+            if self.linearisation == "kacanov": #Newton linearisation of the convective term
+                if self.formulation_Tup or self.formulation_TSup:
+                    if self.thermal_conv == "natural_Ra":
+                        J0 += - delta * inner(self.advect*dot(grad(u), u0), grad(q)) * dx
+                    elif self.thermal_conv == "natural_Ra2":
+                        J0 += - delta * inner((self.advect/self.Pr)*dot(grad(u), u0), grad(q)) * dx
+                    elif self.thermal_conv == "natural_Gr":
+                        J0 += - delta * inner(self.advect*dot(grad(u), u0), grad(q)) * dx
+                    elif self.thermal_conv == "forced":
+                        J0 += - delta * inner(self.Re*self.advect*dot(grad(u), u0), grad(q)) * dx
+
+                else:
+                    J0 += - delta * inner(self.advect*dot(grad(u), u0), grad(q)) * dx
+
+            return J0
 
 class P1P0Solver(ScottVogeliusSolver):
 
@@ -1402,12 +1451,7 @@ class P1P0Solver(ScottVogeliusSolver):
             stransfer = DGInjection()
             self.stransfer = stransfer
 
-        #if self.stabilisation_type_u in ["burman", "burman-temp", "supg-temp", None]: #TODO: Check this...
         qtransfer = NullTransfer()
-        #elif self.stabilisation_type_u in ["gls", "supg"]:
-        #    qtransfer = EmbeddedDGTransfer(Q.ufl_element())
-        #else:
-        #    raise ValueError("Unknown stabilisation")
         self.qtransfer = qtransfer
 
 
@@ -1432,3 +1476,26 @@ class P1P0Solver(ScottVogeliusSolver):
         F -=  inner(avg(delta) * jump(p),jump(q))*dS
 
         return F
+
+    def get_jacobian(self):
+
+        J0 = super().get_jacobian()
+        if self.linearisation == "newton":
+            return J0  #Already contains the pressure stabilisation
+        else:
+
+            #Split variables
+            fields = self.split_variables(self.z)
+            q = fields["q"]
+            #Split trial function
+            w = TrialFunction(self.Z)
+            fields0 = self.split_variables(w)
+            p0 = fields0["p"]
+
+            #Stabilisation
+            h = CellDiameter(self.mesh)
+            beta = Constant(0.1)
+            delta = h * beta
+            J0 -=  inner(avg(delta) * jump(p0),jump(q))*dS
+
+            return J0
