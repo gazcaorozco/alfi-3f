@@ -503,8 +503,8 @@ class NonNewtonianSolver(object):
             if self.stabilisation_form_t is not None:
                J0 += derivative(self.stabilisation_form_t, self.z, w)
 
-            self.J = J0
         return J0
+#        return inner(self.nu*grad(u0),grad(v))*dx - p0*div(v)*dx - q*div(u0)*dx
 
     def split_variables(self, z):
         Z = self.Z
@@ -1329,27 +1329,47 @@ class P1P1Solver(TaylorHoodSolver):
     def residual(self):
 
         F = super().residual()
-        #Define functions and test functions
-        fields = self.split_variables(self.z)
-        u = fields["u"]
-        p = fields["p"]
-        q = fields["q"]
 
-        #Stabilisation
-        if not(self.stabilisation_type_u == "gls"):
+        if self.stabilisation_type_u == "gls":
+            return F
+        else:
+            #Define functions and test functions
+            fields = self.split_variables(self.z)
+            u = fields["u"]
+            p = fields["p"]
+            q = fields["q"]
+
+            #Stabilisation (maybe it could be cleaner by using self.strong_residual)
             h = CellDiameter(self.mesh)
             beta = Constant(0.2)
             delta = beta*h*h
-            F += - delta * inner(self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
+            if self.formulation_Tup or self.formulation_TSup:
+                g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
+                theta = fields["theta"]
+                if self.thermal_conv == "natural_Ra":
+                    F += - delta * inner(self.advect*dot(grad(u), u) + grad(p) - self.Ra*self.Pr*theta*g, grad(q)) * dx
+                elif self.thermal_conv == "natural_Ra2":
+                    F += - delta * inner((self.advect/self.Pr)*dot(grad(u), u) + grad(p) - self.Ra*theta*g, grad(q)) * dx
+                elif self.thermal_conv == "natural_Gr":
+                    F += - delta * inner(self.advect*dot(grad(u), u) + grad(p) - theta*g, grad(q)) * dx
+                elif self.thermal_conv == "forced":
+                    F += - delta * inner(self.Re*self.advect*dot(grad(u), u) + grad(p) - theta*g, grad(q)) * dx
 
-        rhs = self.problem.rhs(self.Z)
-        if rhs is not None:
-            if self.formulation_up or self.formulation_Sup or self.formulation_LSup or self.formulation_Lup: #Assumes the equations for S and L do NOT have right-hand-sides
-                F += delta * inner(rhs[0], grad(q)) * dx
-            elif self.formulation_Tup or self.formulation_TSup:
-                F += delta * inner(rhs[1], grad(q)) * dx
+            else:
+                F += - delta * inner(self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
 
-        return F
+            rhs = self.problem.rhs(self.Z)
+            if rhs is not None:
+                if self.formulation_up or self.formulation_Sup or self.formulation_LSup or self.formulation_Lup: #Assumes the equations for S and L do NOT have right-hand-sides
+                    F += delta * inner(rhs[0], grad(q)) * dx
+                elif self.formulation_Tup or self.formulation_TSup:
+                    F += delta * inner(rhs[1], grad(q)) * dx
+
+            return F
+
+#    def get_jacobian(self):
+
+#       J0 = super().get_jacobian()
 
 class P1P0Solver(ScottVogeliusSolver):
 
