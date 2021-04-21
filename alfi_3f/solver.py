@@ -348,11 +348,6 @@ class NonNewtonianSolver(object):
             elif self.formulation_Tup:
                 G0 = self.problem.const_rel_picard(D, theta, D0)
                 G = self.problem.const_rel(D, theta)
-                print("Here?")
-                JJ= replace(derivative(inner(inner(G,grad(u)), theta_)*dx, self.z), {self.z: w})
-#                replace(inner(u,v)*dx, {self.z: w})
-                print("DONE")
-
             elif self.formulation_LSup:
                 G0 = self.problem.const_rel_picard(S, L, S0, L0)
             elif self.formulation_Lup:
@@ -490,25 +485,25 @@ class NonNewtonianSolver(object):
                             - (self.Br/self.Pe) * inner(inner(S0,sym(grad(u))), theta_) * dx
                             - (self.Br/self.Pe) * inner(inner(S,sym(grad(u0))), theta_) * dx
                             )
-                if (self.linearisation == "kacanov"):
-                    #Add extra term for Newton linearisation of the convective term
-                    if (self.formulation_Tup or self.formulation_TSup) and (self.thermal_conv == "natural_Ra2"):
-                        J0 += (1./self.Pr) * self.advect * inner(dot(grad(u), u0), v)*dx
-                    elif (self.formulation_Tup or self.formulation_TSup) and (self.thermal_conv == "forced"):
-                        J0 += self.Re * self.advect * inner(dot(grad(u), u0), v)*dx
-                    else:
-                        J0 += self.advect * inner(dot(grad(u), u0), v)*dx
-                    #Same for the convective term in the temperature equation
-                    if self.formulation_Tup or self.formulation_TSup:
-                        J0 += inner(dot(grad(theta), u0), theta_) * dx
+            if (self.linearisation == "kacanov"):
+                #Add extra term for Newton linearisation of the convective term
+                if (self.formulation_Tup or self.formulation_TSup) and (self.thermal_conv == "natural_Ra2"):
+                    J0 += (1./self.Pr) * self.advect * inner(dot(grad(u), u0), v)*dx
+                elif (self.formulation_Tup or self.formulation_TSup) and (self.thermal_conv == "forced"):
+                    J0 += self.Re * self.advect * inner(dot(grad(u), u0), v)*dx
+                else:
+                    J0 += self.advect * inner(dot(grad(u), u0), v)*dx
+                #Same for the convective term in the temperature equation
+                if self.formulation_Tup or self.formulation_TSup:
+                    J0 += inner(dot(grad(theta), u0), theta_) * dx
 
-#            if self.stabilisation_form0 is not None: #FIXME: What happens to the stabilisation?
-#               J0 += (self.advect * self.stabilisation_form0)
-#            self.J = J0
-#
-#            if self.stabilisation_form0 is not None:
-#               J0 += (self.advect * self.stabilisation_form0)
-#            self.J = J0
+            if self.stabilisation_form_u is not None:
+               J0 += derivative(self.stabilisation_form_u, self.z, w)
+
+            if self.stabilisation_form_t is not None:
+               J0 += derivative(self.stabilisation_form_t, self.z, w)
+
+            self.J = J0
         return J0
 
     def split_variables(self, z):
