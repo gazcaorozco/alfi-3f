@@ -4,7 +4,7 @@ from alfi_3f import *
 
 from firedrake.petsc import PETSc
 
-#PETSc.Sys.popErrorHandler()
+PETSc.Sys.popErrorHandler()
 
 class ImplicitCarreau_ldc(NonNewtonianProblem_up):
     def __init__(self,baseN,r,nu,eps,tau,diagonal=None,regularised=True):
@@ -72,21 +72,21 @@ if __name__ == "__main__":
     problem_up.interpolate_initial_guess(solver_up.z)
 
     #Test a simple problem
-#    r_s = [2.]
-#    epss = [1.]
-#    nus = [2.]
-#    taus = [1.]
+    r_s = [2.]
+    epss = [1.]
+    nus = [2.]
+    taus = [1.]
 
     #Continuation for small nu (needs advective stabilisation)
-    r_s = [2.,2.5]
-    taus = [0.95,0.9,0.85,0.8,0.75,0.7,0.65,0.6,0.55,0.5]
-    epss = [1.,0.5,0.1,0.05,0.01,0.008,0.005]
-    res = [1, 10, 100] + list(range(200, 10000+200, 200))
-    nus = [2./re for re in res]
+#    r_s = [2.,2.5]
+#    taus = [0.95,0.9,0.85,0.8,0.75,0.7,0.65,0.6,0.55,0.5]
+#    epss = [1.,0.5,0.1,0.05,0.01,0.008,0.005]
+#    res = [1, 10, 100] + list(range(200, 10000+200, 200))
+#    nus = [2./re for re in res]
 
 #    #For continuation in r,r,eps,eps,tau,tau,nu,nu
-#    continuation_params = {"r": [r_s[0]],"eps": [epss[0]],"tau": [taus[0]],"nu": [nus[0]]}
-    continuation_params = {"r": r_s, "eps": epss, "tau": taus, "nu": nus}
+    continuation_params = {"r": [r_s[0]],"eps": [epss[0]],"tau": [taus[0]],"nu": [nus[0]]}
+#    continuation_params = {"r": r_s, "eps": epss, "tau": taus, "nu": nus}
     results = run_solver(solver_up, args, continuation_params)
 
 #    #Test to see if solutions are too different for different gammas

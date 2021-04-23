@@ -5,6 +5,7 @@ from mpi4py import MPI
 
 #from alfi.stabilisation import *
 from alfi.transfer import *
+from alfi.solver import DGMassInv
 
 from alfi_3f.stabilisation import *
 from alfi_3f.transfer import DGInjection
@@ -12,6 +13,57 @@ from alfi_3f.transfer import DGInjection
 import pprint
 import sys
 from datetime import datetime
+
+class P1P0SchurPC(DGMassInv):
+
+    def initialize(self, pc):
+        _, P = pc.getOperators()
+        appctx = self.get_appctx(pc)
+        V = dmhooks.get_function_space(pc.getDM())
+        h = CellDiameter(V.ufl_domain())
+        delta = Constant(0.1) * avg(h)  #Get this through the appctx?
+        self.gamma = appctx["gamma"]
+        self.nu = appctx["nu"]
+
+        # get function spaces
+        u = TrialFunction(V)
+        v = TestFunction(V)
+        #For the first option
+        schur_approx_inv = assemble(Tensor((1./self.gamma)*inner(u, v)*dx + inner(delta*jump(u), jump(v))*dS).inv)   #This one does not work
+        self.schur_approx_inv = schur_approx_inv.petscmat
+
+        #For the second option
+        massinv = assemble(Tensor(inner(u, v)*dx).inv)
+        self.massinv = massinv.petscmat
+        C_stab = assemble(delta * inner(jump(u), jump(v))*dS)
+        self.C_stab = C_stab.petscmat
+        self.workspace = [self.massinv.createVecLeft() for i in (0, 1, 2)]
+
+    def apply(self, pc, x, y):
+        """ Option 1: The Schur complement inverse is approximated as:
+        -(C + (1 / gamma) * M)^{-1}
+        """
+        #Does not work
+        self.schur_approx_inv.mult(x, y)
+
+        """ Option 2: The Schur complement inverse is approximated as:
+        -(nu + gamma) * M^{-1} + nu * gamma * M^{-1} * C * M^{-1}
+        """
+        #Does not work (possitive gamma makes things worse -> more iterations)
+#        a, b, c = self.workspace
+#        self.massinv.mult(x, a)
+#        self.C_stab.mult(a, b)
+#        self.massinv.mult(b, c)
+#        c.scale(float(self.nu*self.gamma))
+#
+#        a.scale(-float(self.nu) - float(self.gamma))
+#
+#        y.waxpy(1.0, c, a) #by changing 1.0 -> 0.0 everything reduces to the old one (DGMassInv)
+
+        """ This is the old approximation for when there is no stabilisation (C=0)"""
+#        self.massinv.mult(x, y)
+#        scaling = float(self.nu) + float(self.gamma)
+#        y.scale(-scaling)
 
 
 class NonNewtonianSolver(object):
@@ -868,7 +920,8 @@ class NonNewtonianSolver(object):
         fieldsplit_1 = {
             "ksp_type": "preonly",
             "pc_type": "python",
-            "pc_python_type": "alfi.solver.DGMassInv"
+#            "pc_python_type": "alfi.solver.DGMassInv"
+            "pc_python_type": "alfi_3f.solver.P1P0SchurPC"
         }
 
         use_mg = self.solver_type == "almg"
@@ -996,40 +1049,40 @@ class NonNewtonianSolver(object):
         else:
             outer = {**outer_base, **outer_fieldsplit}
 
-        parameters["default_sub_matrix_type"] = "aij" if self.use_mkl or self.solver_type == "simple" else "baij"
+        #parameters["default_sub_matrix_type"] = "aij" if self.use_mkl or self.solver_type == "simple" else "baij"
 
-        if self.solver_type == "lu-p1":              #Own parameters for p1p1
-            return {"snes_type": "newtonls",
-                             "snes_max_it": 100,
-                             "snes_linesearch_type": "basic",#"l2",
-                             "snes_linesearch_maxstep": 1.0,
-                             "snes_linesearch_damping": 0.8,
-                             "snes_monitor": None,
-                             "snes_linesearch_monitor": None,
-                             "snes_converged_reason": None,
-    #                         "snes_atol": 5e-7,  ################## nref2-3
-                             "snes_atol": 1e-9,
-                             "snes_max_it": 100,
-                             "monitor_true_residual": None,
-                             "ksp_monitor_true_residual": None,
-                             "ksp_converged_reason": None,
-                             'mat_type': 'aij',
-                             "ksp_max_it": 1,
-                             "ksp_convergence_test": "skip",
-                             'ksp_type': 'gmres',
-                             'pc_type': 'lu',
-#                             "pc_factor_mat_solver_type": "superlu",
-                             "pc_factor_mat_solver_type": "mumps",
-                             "mat_mumps_icntl_14": 8000,#,5000,#200
-                             "mat_mumps_icntl_24": 1,
-                             "mat_mumps_cntl_1": 1e-5,#0.001,
-#                             "mat_mumps_cntl_3": 0.0001,#1e-6,
-#                             "mat_mumps_cntl_1": 1e-6, #-5 and -6 work ok
-                             "mat_mumps_cntl_3": -1e-14,#1e-2,#it seems this creates problems (we want something small here)
-                             "mat_mumps_cntl_5": 1e20,
-                             }
-        else:
-            return outer
+#        if self.solver_type == "lu-p1":              # Own parameters for p1p1. TODO:Clean this
+#            return {"snes_type": "newtonls",
+#                             "snes_max_it": 100,
+#                             "snes_linesearch_type": "basic",#"l2",
+#                             "snes_linesearch_maxstep": 1.0,
+#                             "snes_linesearch_damping": 0.8,
+#                             "snes_monitor": None,
+#                             "snes_linesearch_monitor": None,
+#                             "snes_converged_reason": None,
+#    #                         "snes_atol": 5e-7,  ################## nref2-3
+#                             "snes_atol": 1e-9,
+#                             "snes_max_it": 100,
+#                             "monitor_true_residual": None,
+#                             "ksp_monitor_true_residual": None,
+#                             "ksp_converged_reason": None,
+#                             'mat_type': 'aij',
+#                             "ksp_max_it": 1,
+#                             "ksp_convergence_test": "skip",
+#                             'ksp_type': 'gmres',
+#                             'pc_type': 'lu',
+##                             "pc_factor_mat_solver_type": "superlu",
+#                             "pc_factor_mat_solver_type": "mumps",
+#                             "mat_mumps_icntl_14": 8000,#,5000,#200
+#                             "mat_mumps_icntl_24": 1,
+#                             "mat_mumps_cntl_1": 1e-5,#0.001,
+##                             "mat_mumps_cntl_3": 0.0001,#1e-6,
+##                             "mat_mumps_cntl_1": 1e-6, #-5 and -6 work ok
+#                             "mat_mumps_cntl_3": -1e-14,#1e-2,#it seems this creates problems (we want something small here)
+#                             "mat_mumps_cntl_5": 1e20,
+#                             }
+#        else:
+        return outer
 
     def message(self, msg):
         if self.mesh.comm.rank == 0:
@@ -1511,11 +1564,13 @@ class P1P0Solver(ScottVogeliusSolver):
         fields = self.split_variables(self.z)
         p = fields["p"]
         q = fields["q"]
+        v = fields["v"]
 
         #Stabilisation
         h = CellDiameter(self.mesh)
         beta = Constant(0.1)
         delta = h * beta
+        F += self.gamma * inner(avg(delta) * jump(p), jump(div(v)))*dS
         F -=  inner(avg(delta) * jump(p),jump(q))*dS
 
         return F
@@ -1542,3 +1597,10 @@ class P1P0Solver(ScottVogeliusSolver):
             J0 -=  inner(avg(delta) * jump(p0),jump(q))*dS
 
             return J0
+
+    def get_parameters(self):
+
+        params = super().get_parameters()
+#        params["fieldsplit_1_pc_python_type"] = "alfi_3f.solver.P1P0SchurPC"
+
+        return params
