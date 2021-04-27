@@ -998,38 +998,7 @@ class NonNewtonianSolver(object):
 
         parameters["default_sub_matrix_type"] = "aij" if self.use_mkl or self.solver_type == "simple" else "baij"
 
-        if self.solver_type == "lu-p1":              #Own parameters for p1p1
-            return {"snes_type": "newtonls",
-                             "snes_max_it": 100,
-                             "snes_linesearch_type": "basic",#"l2",
-                             "snes_linesearch_maxstep": 1.0,
-                             "snes_linesearch_damping": 0.8,
-                             "snes_monitor": None,
-                             "snes_linesearch_monitor": None,
-                             "snes_converged_reason": None,
-    #                         "snes_atol": 5e-7,  ################## nref2-3
-                             "snes_atol": 1e-9,
-                             "snes_max_it": 100,
-                             "monitor_true_residual": None,
-                             "ksp_monitor_true_residual": None,
-                             "ksp_converged_reason": None,
-                             'mat_type': 'aij',
-                             "ksp_max_it": 1,
-                             "ksp_convergence_test": "skip",
-                             'ksp_type': 'gmres',
-                             'pc_type': 'lu',
-#                             "pc_factor_mat_solver_type": "superlu",
-                             "pc_factor_mat_solver_type": "mumps",
-                             "mat_mumps_icntl_14": 8000,#,5000,#200
-                             "mat_mumps_icntl_24": 1,
-                             "mat_mumps_cntl_1": 1e-5,#0.001,
-#                             "mat_mumps_cntl_3": 0.0001,#1e-6,
-#                             "mat_mumps_cntl_1": 1e-6, #-5 and -6 work ok
-                             "mat_mumps_cntl_3": -1e-14,#1e-2,#it seems this creates problems (we want something small here)
-                             "mat_mumps_cntl_5": 1e20,
-                             }
-        else:
-            return outer
+        return outer
 
     def message(self, msg):
         if self.mesh.comm.rank == 0:
@@ -1231,8 +1200,6 @@ class ConformingSolver(NonNewtonianSolver):
 
         return F
 
-#class HdivSolver(NonNewtonianSolver):
-
 
 class ScottVogeliusSolver(ConformingSolver):
 
@@ -1396,7 +1363,7 @@ class P1P1Solver(TaylorHoodSolver):
                 elif self.thermal_conv == "natural_Gr":
                     F += - delta * inner(self.advect*dot(grad(u), u) + grad(p) - theta*g, grad(q)) * dx
                 elif self.thermal_conv == "forced":
-                    F += - delta * inner(self.Re*self.advect*dot(grad(u), u) + grad(p) - theta*g, grad(q)) * dx
+                    F += - delta * inner(self.Re*self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
 
             else:
                 F += - delta * inner(self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
@@ -1442,7 +1409,7 @@ class P1P1Solver(TaylorHoodSolver):
                 elif self.thermal_conv == "natural_Gr":
                     J0 += - delta * inner(self.advect*dot(grad(u0), u) + grad(p0) - theta0*g, grad(q)) * dx
                 elif self.thermal_conv == "forced":
-                    J0 += - delta * inner(self.Re*self.advect*dot(grad(u0), u) + grad(p0) - theta0*g, grad(q)) * dx
+                    J0 += - delta * inner(self.Re*self.advect*dot(grad(u0), u) + grad(p0), grad(q)) * dx
 
             else:
                 J0 += - delta * inner(self.advect*dot(grad(u0), u) + grad(p0), grad(q)) * dx
