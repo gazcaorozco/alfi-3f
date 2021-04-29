@@ -83,18 +83,20 @@ if __name__ == "__main__":
 
     #Rheological parameters
     if args.rheol == "synovial":
-        alphas = [1.0]; alpha = Constant(alphas[0]) #Newtonian
+        alphas = [2.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
         betas = [1e-4]; beta = Constant(betas[0])
         epss = [0.001]; eps = Constant(epss[0])
         Re_s = [1.0]; Re = Constant(Re_s[0])
-        Pe_s = [100., 1000, 1e5]; Pe = Constant(Pe_s[0])
+#        Pe_s = [100., 1000, 1e5]; Pe = Constant(Pe_s[0])
+        Pe_s = [1e4]; Pe = Constant(Pe_s[0])#For Kacanov
+        Pe_s = [500, 1e4]; Pe = Constant(Pe_s[0])#For Newton
 
     elif args.rheol == "power-law":
-        alphas = [1.6]; alpha = Constant(alphas[0]) #Newtonian
+        alphas = [1.6]; alpha = Constant(alphas[0]) #Newtonian alpha=2
         betas = [1e-4]; beta = Constant(betas[0])
         epss = [0.001]; eps = Constant(epss[0])
         Re_s = [1.0]; Re = Constant(Re_s[0])
-        Pe_s = [100.]; Pe = Constant(Pe_s[0])
+        Pe_s = [1000.]; Pe = Constant(Pe_s[0])
 
     else:
         Re_s = [1.0]; Re = Constant(Re_s[0])
@@ -139,7 +141,7 @@ if __name__ == "__main__":
         string += "_Re%s"%(Re_s[-1])
         string += "_k%s"%(args.k)
         string += "_nref%s"%(args.nref)
-#        string += "_%s"%(args.stabilisation_type)
-#        string += "_%s"%(args.solver_type)
+        string += "_%s"%(args.stabilisation_type_t)
+        string += "_%s"%(args.solver_type)
 
         File("plots/z_%s.pvd"%string).write(nu_eff,n_exp,u,p,c)
