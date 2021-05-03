@@ -12,7 +12,9 @@ class ChemicallyReactingLDC(NonNewtonianProblem_Tup):
         self.rheol = rheol
 
     def mesh(self, distribution_parameters):
-        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/rectangle.msh",
+#        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/rectangle.msh",
+#                    distribution_parameters=distribution_parameters)
+        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/rectangle_bdry.msh",
                     distribution_parameters=distribution_parameters)
         return base
 
@@ -83,13 +85,13 @@ if __name__ == "__main__":
 
     #Rheological parameters
     if args.rheol == "synovial":
-        alphas = [2.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
+        alphas = [0.0,2.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
         betas = [1e-4]; beta = Constant(betas[0])
         epss = [0.001]; eps = Constant(epss[0])
         Re_s = [1.0]; Re = Constant(Re_s[0])
 #        Pe_s = [100., 1000, 1e5]; Pe = Constant(Pe_s[0])
         Pe_s = [1e4]; Pe = Constant(Pe_s[0])#For Kacanov
-        Pe_s = [500, 1e4]; Pe = Constant(Pe_s[0])#For Newton
+#        Pe_s = [500, 1e4]; Pe = Constant(Pe_s[0])#For Newton
 
     elif args.rheol == "power-law":
         alphas = [1.6]; alpha = Constant(alphas[0]) #Newtonian alpha=2
