@@ -8,7 +8,7 @@ SetFactory("OpenCASCADE");
 //Physical Surface(6) = {6};
 //Physical Volume(7) = {1};
 
-lc = 0.22;
+lc = 0.4;
 Point(1) = {-0, -0, -0, lc};
 Point(2) = {1, 0, 0, lc};
 Point(3) = {1, 1, 0, lc};
@@ -34,10 +34,10 @@ Field[1].NumPointsPerCurve = 100;
 
 Field[2] = Threshold;
 Field[2].InField = 1;
-Field[2].SizeMin = lc / 3.5;
+Field[2].SizeMin = lc / 2; //3.5
 Field[2].SizeMax = lc;
-Field[2].DistMin = 0.1;
-Field[2].DistMax = 0.3;
+Field[2].DistMin = 0.1; //0.1
+Field[2].DistMax = 0.3; //0.3
 
 Background Field = 2;
 
@@ -51,7 +51,7 @@ newEntities[] =
 Extrude { 0,0,1 }
 {
 	Surface{1};
-	Layers{1./lc};
+	Layers{4};
 //	Recombine;
 };
 
