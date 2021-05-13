@@ -185,13 +185,15 @@ if __name__ == "__main__":
     else:
         #Grashof number
         Gr_s = [2500] + list(range(20000, 100000000 + 20000, 20000)) #To test how high can it get (very inefficient)
-        Gr_s = [2500] + list(range(500000, 12500000 + 500000, 500000)) + list(range(12500000 + 500000, 15000000 + 500000, 500000)) + list(range(15000000 + 50000, 1e8, 50000)) #To test how high can it get
+        Gr_s = [2500] + list(range(50000, 500000 + 50000, 50000)) + list(range(500000, 12500000 + 500000, 500000)) + list(range(12500000 + 500000, 15000000 + 500000, 500000)) + list(range(15000000 + 500000, 100000000, 500000)) #To test how high can it get
+        Gr_s = [2500] + list(range(50000, 500000 + 50000, 50000)) + list(range(500000, 12500000 + 500000, 500000)) + list(range(12500000 + 500000, 15000000 + 500000, 500000)) + list(range(15000000 + 1000000, 100000000 + 1000000, 1000000)) #Test: Works (k,nref)=(2,1),(2,2), T:supg,none,burman
+        Gr_s = [2500, 50000] + list(range(100000, 1000000 + 100000, 100000)) + list(range(2000000, 20000000 + 1000000, 1000000)) + list(range(25000000, 100000000 + 5000000, 5000000)) #Test
 #        Gr_s = [2500] + list(range(500000, 12500000 + 500000, 500000)) + list(range(12500000 + 500000, 15000000 + 500000, 500000)) #For Navier-Stokes
         Gr = Constant(Gr_s[0])
 
     #Power-law
     r_s = [2.0]
-    r_s = [2.0,2.3,2.6,2.7]#,3.5]
+#    r_s = [2.0,2.3,2.6,2.7]#,3.5]
 #    r_s = [2.0,1.9,1.8,1.7,1.6]
 #    r_s = [2.0,1.8,1.6] #For power-law
     r = Constant(r_s[0])
