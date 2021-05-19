@@ -8,7 +8,7 @@ SetFactory("OpenCASCADE");
 //Physical Surface(6) = {6};
 //Physical Volume(7) = {1};
 
-lc = 0.4;
+lc = 0.5;
 Point(1) = {-0, -0, -0, lc};
 Point(2) = {1, 0, 0, lc};
 Point(3) = {1, 1, 0, lc};
