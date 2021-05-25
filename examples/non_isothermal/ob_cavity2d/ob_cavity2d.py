@@ -165,6 +165,9 @@ if __name__ == "__main__":
                         action="store_true")
     parser.add_argument("--plots", dest="plots", default=False,
                         action="store_true")
+    parser.add_argument("--plaw", dest="plaw", default=False,
+                        action="store_true")
+    parser.add_argument("--dissipation", type=int, default=0)
     args, _ = parser.parse_known_args()
 
     assert args.thermal_conv in ["natural_Ra", "natural_Ra2", "natural_Gr"], "You need to select natural convection"
@@ -172,15 +175,14 @@ if __name__ == "__main__":
     #Prandtl number
     Pr_s = [1.,10.]
     Pr_s = [1.]
-#    Pr_s = [1.,0.5,0.1,0.01]
-#    Pr_s = [1.,1000,2500,5000,10000]
     Pr = Constant(Pr_s[0])
 
     if args.thermal_conv in ["natural_Ra", "natural_Ra2"]:
         #Rayleigh number (old code)
         Ra_s = [1,2500] + list(range(5000,50000000 + 2500,2500)) #To test how high can it get (very inefficient)
         Ra_s = [1,2500,5000] + list(range(10000, 20000 + 5000,5000)) #For Power-law (shear thinning)
-        Ra_s = [1,700,1250,2500,5000] + list(range(10000, 100000 + 5000,5000)) #For Power-law (shear thickenning)
+        Ra_s = [1, 1000, 2500, 3500, 5000, 7500] + list(range(10000, 30000 + 2500, 2500)) #For Power-law (shear thinning) nref=3
+#        Ra_s = [1,700,1250,2500,5000] + list(range(10000, 100000 + 5000,5000)) #For Power-law (shear thickenning)
         Ra = Constant(Ra_s[0])
     else:
         #Grashof number
@@ -192,16 +194,26 @@ if __name__ == "__main__":
         Gr = Constant(Gr_s[0])
 
     #Power-law
-    r_s = [2.0]
+    if args.plaw:
 #    r_s = [2.0,2.3,2.6,2.7]#,3.5]
 #    r_s = [2.0,1.9,1.8,1.7,1.6]
 #    r_s = [2.0,1.8,1.6] #For power-law
+        r_s = [2.0,1.8,1.7,1.6] #For power-law nref3
+    else:
+        r_s = [2.0]
     r = Constant(r_s[0])
 
     #Dissipation number
-    Di_s = [0.]
-#    Di_s = [0.,0.2,0.4,0.6,0.8,1.,1.3,1.5,1.7,1.9,2.]
-#    Di_s = [0.,0.6,1.3]#,2.]  #For Navier-Stokes
+    if args.dissipation == 0:
+        Di_s = [0.]
+    elif args.dissipation == 1:
+        Di_s = [0.,0.6]
+    elif args.dissipation == 2:
+        Di_s = [0.,0.6,1.3]
+    elif args.dissipation == 3:
+        Di_s = [0.,0.6,1.3,2.]  #For Navier-Stokes
+    else:
+        raise NotImplementedError
     Di = Constant(Di_s[0])
 
     if args.thermal_conv in ["natural_Ra", "natural_Ra2"]:
@@ -256,7 +268,7 @@ if __name__ == "__main__":
         elif args.temp_dependent == "viscosity-conductivity":
             string += "_visccond"
         if args.thermal_conv in ["natural_Ra","natural_Ra2"]:
-            string += "%s_Ra%s"%(args.thermal_conv,Ra_s[-1])
+            string += "_%s_Ra%s"%(args.thermal_conv,Ra_s[-1])
         elif args.thermal_conv == "grashof":
             string += "_Gr%s"%(Gr_s[-1])
         string += "_Pr%s"%(Pr_s[-1])
@@ -264,7 +276,7 @@ if __name__ == "__main__":
         string += "_r%s"%(r_s[-1])
         string += "_k%s"%(args.k)
         string += "_nref%s"%(args.nref)
-        string += "_%s"%(args.stabilisation_type)
+        string += "_%s"%(args.stabilisation_type_t)
         string += "_%s"%(args.solver_type)
 
         File("plots/z%s.pvd"%string).write(DD,SS,u,theta)

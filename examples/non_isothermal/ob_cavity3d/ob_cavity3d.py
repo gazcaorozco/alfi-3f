@@ -1,28 +1,32 @@
-#python temp_viscosity_ob_cavity3d.py --baseN 4 --discretisation sv --mh bary --patch macro --restriction --gamma 10000 --temp-bcs left-right --stabilisation-weight 5e-3 --stabilisation-type none --solver-type almg --non-dimensional rayleigh1 --fields Tup  --temp-dependent none --k 3 --nref 1 --cycles 2 --smoothing 4
+#python temp_viscosity_ob_cavity3d.py --baseN 6 --discretisation sv --mh bary --patch macro --restriction --gamma 10000 --temp-bcs left-right --stabilisation-weight 5e-3 --stabilisation-type-u none --stabilisation-type-t none --solver-type allu --thermal-conv natural_Gr --fields Tup  --temp-dependent none --k 3 --nref 1 --cycles 1 --smoothing 6
 from firedrake import *
 from alfi_3f import *
 
 class TempViscosityOBCavity_up(NonIsothermalProblem_up):
-    def __init__(self, baseN, temp_bcs="left-right", temp_dependent="viscosity", non_dimensional="rayleigh1", **params):
-        super().__init__(non_dimensional=non_dimensional, **params)
+    def __init__(self, baseN, temp_bcs="left-right", temp_dependent="viscosity", unstructured=False, **params):
+        super().__init__(**params)
         self.baseN = baseN
         self.temp_bcs = temp_bcs
         self.temp_dependent = temp_dependent
+        self.unstructured = unstructured
 
     def mesh(self, distribution_parameters):
-        base = BoxMesh(self.baseN, self.baseN, self.baseN, 1, 1, 1,
+        if self.unstructured:
+            base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/cube.msh", distribution_parameters=distribution_parameters)
+        else:
+            base = BoxMesh(self.baseN, self.baseN, self.baseN, 1, 1, 1,
                             distribution_parameters=distribution_parameters)
         return base
 
-    def bcs(self, Z):
+    def bcs(self, Z):#4 - left; 3 - back; 5 - front; 2 - top;
         if self.temp_bcs == "down-up":
             bcs = [DirichletBC(Z.sub(1), Constant((0., 0., 0.)), [1, 2, 3, 4, 5, 6]),
-                   DirichletBC(Z.sub(0), Constant(1.0), (5,)),               #Hot (bottom) - Cold (top)
-                   DirichletBC(Z.sub(0), Constant(0.0), (6,)),
+                   DirichletBC(Z.sub(0), Constant(1.0), (1,)),               #Hot (bottom) - Cold (top)
+                   DirichletBC(Z.sub(0), Constant(0.0), (2,)),
                 ]
         else:
             bcs = [DirichletBC(Z.sub(1), Constant((0., 0., 0.)), [1, 2, 3, 4, 5, 6]),
-                   DirichletBC(Z.sub(0), Constant(1.0), (3,)),               #Hot (left) - Cold (right)
+                   DirichletBC(Z.sub(0), Constant(1.0), (6,)),               #Hot (left) - Cold (right)
                    DirichletBC(Z.sub(0), Constant(0.0), (4,)),
                 ]
         return bcs
@@ -61,20 +65,28 @@ class TempViscosityOBCavity_up(NonIsothermalProblem_up):
             kappa = Constant(1.)
         return kappa
 
-    def interpolate_initial_guess(self, w):
-        (x,y,z) = SpatialCoordinate(w.ufl_domain())
-        w_expr = as_vector([z,x + 5, 3.*y])
-        w.sub(1).interpolate(w_expr)
+    def interpolate_initial_guess(self, vel):
+        (x,y,z) = SpatialCoordinate(vel.ufl_domain())
+#        w_expr = as_vector([z,x + 5, 3.*y])
+        u = 8.*x*x*y*z*(x-1.)*(x-1.)*(y-1.)*(z-1.)*(y-z)
+        v = -8.*x*y*y*z*(x-1.)*(y-1.)*(y-1.)*(z-1.)*(x-z)
+        w = 8.*x*y*z*z*(x-1.)*(y-1.)*(z-1.)*(z-1.)*(x-y)
+        w_expr = as_vector([u, v, w])
+        vel.sub(1).interpolate(w_expr)
 
 class TempViscosityOBCavity_Sup(NonIsothermalProblem_Sup):
-    def __init__(self, baseN, temp_bcs="left-right",temp_dependent="viscosity", non_dimensional="rayleigh1", **params):
-        super().__init__(non_dimensional=non_dimensional,**params)
+    def __init__(self, baseN, temp_bcs="left-right", temp_dependent="viscosity", unstructured=False, **params):
+        super().__init__(**params)
         self.baseN = baseN
         self.temp_bcs = temp_bcs
         self.temp_dependent = temp_dependent
+        self.unstructured = unstructured
 
     def mesh(self, distribution_parameters):
-        base = BoxMesh(self.baseN, self.baseN, self.baseN, 1, 1, 1,
+        if self.unstructured:
+            base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "cube.msh", distribution_parameters=distribution_parameters)
+        else:
+            base = BoxMesh(self.baseN, self.baseN, self.baseN, 1, 1, 1,
                             distribution_parameters=distribution_parameters)
         return base
 
@@ -143,11 +155,13 @@ if __name__ == "__main__":
                         choices=["left-right","down-up"])
     parser.add_argument("--temp-dependent", type=str, default="none",
                         choices=["none","viscosity","viscosity-conductivity"])
-    parser.add_argument("--non-dimensional", type=str, default="rayleigh1",
-                        choices=["rayleigh1","rayleigh2","grashof"])
+    parser.add_argument("--unstructured", dest="unstructured", default=False,
+                        action="store_true")
     parser.add_argument("--plots", dest="plots", default=False,
                         action="store_true")
     args, _ = parser.parse_known_args()
+
+    assert args.thermal_conv in ["natural_Ra", "natural_Gr", "natural_Ra2"], "You need to select natural convection"
 
     #Prandtl number
     Pr_s = [2.,6.8]
@@ -155,7 +169,7 @@ if __name__ == "__main__":
     Pr_s = [1.]
     Pr = Constant(Pr_s[0])
 
-    if args.non_dimensional in ["rayleigh1", "rayleigh2"]:
+    if args.thermal_conv in ["natural_Ra", "natural_Ra2"]:
         #Rayleigh number
         Ra_s = [2500] + list(range(5000,500000 + 5000,5000))    #Meant for left-right, constant parameters
         Ra_s = [1,2500,5000] + list(range(10000, 20000 + 5000,5000)) #For Power-law (shear thinning)
@@ -163,15 +177,15 @@ if __name__ == "__main__":
         Ra = Constant(Ra_s[0])
     else:
         #Grashof number
-        Gr_s = [2500] + list(range(20000, 10000000 + 20000, 20000)) #Used to test
         Gr_s = [2500] + list(range(63000, 1260000 + 63000, 63000)) #For Navier-Stokes
-#        Gr_s = [2500] + list(range(63000, 1000000 + 63000, 63000)) #For Navier-Stokes with temp-dependent viscosity and conductivity
+        Gr_s = [2500] + list(range(50000, 10000000 + 50000, 50000)) #For tests
+#        Gr_s = [2500] #Test
         Gr = Constant(Gr_s[0])
 
     #Power-law
     r_s = [2.0,2.5,3.,3.5,4.,4.5,5.]
     r_s = [2.0,1.9,1.8,1.7,1.6]
-#    r_s = [2.0]
+    r_s = [2.0]
     r = Constant(r_s[-1])
 
     #Dissipation number
@@ -180,16 +194,16 @@ if __name__ == "__main__":
 #    Di_s = [0.,0.6,1.3]#,2.] #For Navier-Stokes
     Di = Constant(Di_s[0])
 
-    if args.non_dimensional in ["rayleigh1", "rayleigh2"]:
+    if args.thermal_conv in ["natural_Ra", "natural_Ra2"]:
         if args.fields == "Tup":
-            problem_ = TempViscosityOBCavity_up(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, non_dimensional=args.non_dimensional, Pr=Pr, Ra=Ra, r=r, Di=Di)
+            problem_ = TempViscosityOBCavity_up(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, unstructured=args.unstructured, Pr=Pr, Ra=Ra, r=r, Di=Di)
         else:
-            problem_ = TempViscosityOBCavity_Sup(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, non_dimensional=args.non_dimensional, Pr=Pr, Ra=Ra, r=r, Di=Di)
+            problem_ = TempViscosityOBCavity_Sup(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, unstructured=args.unstructured, Pr=Pr, Ra=Ra, r=r, Di=Di)
     else:
         if args.fields == "Tup":
-            problem_ = TempViscosityOBCavity_up(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, non_dimensional=args.non_dimensional, Pr=Pr, Gr=Gr, r=r, Di=Di)
+            problem_ = TempViscosityOBCavity_up(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, unstructured=args.unstructured, Pr=Pr, Gr=Gr, r=r, Di=Di)
         else:
-            problem_ = TempViscosityOBCavity_Sup(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, non_dimensional=args.non_dimensional, Pr=Pr, Gr=Gr, r=r, Di=Di)
+            problem_ = TempViscosityOBCavity_Sup(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, unstructured=args.unstructured, Pr=Pr, Gr=Gr, r=r, Di=Di)
     solver_ = get_solver(args, problem_)
     problem_.interpolate_initial_guess(solver_.z)
     solver_.no_convection = True
@@ -198,7 +212,7 @@ if __name__ == "__main__":
     solver_.no_convection = False
 #    solver_.stabilisation_type = args.stabilisation_type
 
-    if args.non_dimensional in ["rayleigh1", "rayleigh2"]:
+    if args.thermal_conv in ["natural_Ra", "natural_Ra2"]:
         continuation_params = {"r": r_s,"Pr": Pr_s,"Di": Di_s,"Ra": Ra_s}
     else:
         continuation_params = {"r": r_s,"Pr": Pr_s,"Di": Di_s,"Gr": Gr_s}
@@ -228,9 +242,9 @@ if __name__ == "__main__":
         SS.rename("Stress")
         DD.rename("Symmetric velocity gradient")
         string = "_up" if args.fields == "Tup" else "_Sup"
-        if problem_.non_dimensional in ["rayleigh1","rayleigh2"]:
-            string += "%s_Ra%s"%(problem_.non_dimensional,Ra_s[-1])
-        elif problem_.non_dimensional == "grashof":
+        if args.thermal_conv in ["natural_Ra","natural_Ra2"]:
+            string += "%s_Ra%s"%(args.thermal_conv,Ra_s[-1])
+        elif args.thermal_conv == "natural_Gr":
             string += "_Gr%s"%(Gr_s[-1])
         string += "_Di%s"%(Di_s[-1])
         string += "_Pr%s"%(Pr_s[-1])
@@ -241,4 +255,4 @@ if __name__ == "__main__":
             string += "_visc"
         elif args.temp_dependent == "viscosity-conductivity":
             string += "_visccond"
-        File("plots_new/z%s.pvd"%string).write(DD,SS,u,theta)
+        File("plots/z%s.pvd"%string).write(DD,SS,u,theta)
