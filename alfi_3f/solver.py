@@ -941,7 +941,8 @@ class NonNewtonianSolver(object):
             "snes_type": "newtonls",
             "snes_max_it": 100,
             "snes_linesearch_type": "basic",#"l2",
-            "snes_linesearch_maxstep": 1.0,
+            "snes_linesearch_maxstep": 1.0,#1.0
+#            "snes_linesearch_damping": 0.7,
             "snes_monitor": None,
             "snes_linesearch_monitor": None,
             "snes_converged_reason": None,

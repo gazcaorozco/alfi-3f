@@ -72,8 +72,16 @@ class TempViscosityOBCavity_up(NonIsothermalProblem_up):
         return kappa
 
     def interpolate_initial_guess(self, z):
-        (x,y) = SpatialCoordinate(z.ufl_domain())
+        X = SpatialCoordinate(z.ufl_domain())
+        (x, y) = X
         w_expr = as_vector([x*x + 5, 3.*y])
+        u = 2.*y*sin(pi*x)*sin(pi*y)*(x**2 - 1.) + pi*sin(pi*x)*cos(pi*y)*(x**2 -1.)*(y**2-1.)
+        v = -2.*x*sin(pi*x)*sin(pi*y)*(y**2 - 1.) - pi*cos(pi*x)*sin(pi*y)*(x**2 - 1.)*(y**2 - 1.)
+        u = (1./4.)*(-2 + x)**2 * x**2 * y * (-2 + y**2)
+        v = -(1./4.)*x*(2 - 3*x + x**2)*y**2*(-4 + y**2)
+        u = replace(u, {X: 2.0 * X})
+        v = replace(v, {X: 2.0 * X})
+        w_expr = as_vector([u,v])
         z.sub(1).interpolate(w_expr)
 
 class TempViscosityOBCavity_Sup(NonIsothermalProblem_Sup):
@@ -180,7 +188,7 @@ if __name__ == "__main__":
     if args.thermal_conv in ["natural_Ra", "natural_Ra2"]:
         #Rayleigh number (old code)
         Ra_s = [1,2500] + list(range(5000,50000000 + 2500,2500)) #To test how high can it get (very inefficient)
-        Ra_s = [1,2500,5000] + list(range(10000, 20000 + 5000,5000)) #For Power-law (shear thinning)
+        Ra_s = [1,2500, 5000, 7500] + list(range(10000, 30000 + 2500, 2500)) #For Power-law (shear thinning)
         Ra_s = [1, 1000, 2500, 3500, 5000, 7500] + list(range(10000, 30000 + 2500, 2500)) #For Power-law (shear thinning) nref=3
 #        Ra_s = [1,700,1250,2500,5000] + list(range(10000, 100000 + 5000,5000)) #For Power-law (shear thickenning)
         Ra = Constant(Ra_s[0])
@@ -280,3 +288,6 @@ if __name__ == "__main__":
         string += "_%s"%(args.solver_type)
 
         File("plots/z%s.pvd"%string).write(DD,SS,u,theta)
+
+#For power-law:
+# python ob_cavity2d.py --discretisation sv --mh bary --patch macro --restriction --baseN 10 --gamma 1e4 --linearisation newton --temp-bcs left-right --stabilisation-weight-u 5e-3 --solver-type almg --thermal-conv natural_Ra --fields Tup --temp-dependent viscosity --stabilisation-type-u burman --stabilisation-type-t supg --k 2 --nref 4 --cycles 1 --smoothing 6 --unstructured
