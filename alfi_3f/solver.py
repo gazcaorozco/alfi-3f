@@ -14,56 +14,73 @@ import pprint
 import sys
 from datetime import datetime
 
-class P1P0SchurPC(DGMassInv):
+class P1P0SchurPC(AuxiliaryOperatorPC):
 
-    def initialize(self, pc):
-        _, P = pc.getOperators()
+    def form(self, pc, test, trial):
+
         appctx = self.get_appctx(pc)
         V = dmhooks.get_function_space(pc.getDM())
         h = CellDiameter(V.ufl_domain())
         delta = Constant(0.1) * avg(h)  #Get this through the appctx?
-        self.gamma = appctx["gamma"]
-        self.nu = appctx["nu"]
+        gamma = appctx["gamma"] #not used for now
+        nu = appctx["nu"]
 
-        # get function spaces
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        #For the first option
-        schur_approx_inv = assemble(Tensor((1./self.gamma)*inner(u, v)*dx + inner(delta*jump(u), jump(v))*dS).inv)   #This one does not work
-        self.schur_approx_inv = schur_approx_inv.petscmat
+        a = 1/nu * inner(test, trial) * dx
+        a += inner(delta*jump(test), jump(trial)) * dS
+        bcs = None
 
-        #For the second option
-        massinv = assemble(Tensor(inner(u, v)*dx).inv)
-        self.massinv = massinv.petscmat
-        C_stab = assemble(delta * inner(jump(u), jump(v))*dS)
-        self.C_stab = C_stab.petscmat
-        self.workspace = [self.massinv.createVecLeft() for i in (0, 1, 2)]
+        return (a, bcs)
 
-    def apply(self, pc, x, y):
-        """ Option 1: The Schur complement inverse is approximated as:
-        -(C + (1 / gamma) * M)^{-1}
-        """
-        #Does not work
-        self.schur_approx_inv.mult(x, y)
-
-        """ Option 2: The Schur complement inverse is approximated as:
-        -(nu + gamma) * M^{-1} + nu * gamma * M^{-1} * C * M^{-1}
-        """
-        #Does not work (possitive gamma makes things worse -> more iterations)
-#        a, b, c = self.workspace
-#        self.massinv.mult(x, a)
-#        self.C_stab.mult(a, b)
-#        self.massinv.mult(b, c)
-#        c.scale(float(self.nu*self.gamma))
+#class P1P0SchurPC(DGMassInv):
 #
-#        a.scale(-float(self.nu) - float(self.gamma))
+#    def initialize(self, pc):
+#        _, P = pc.getOperators()
+#        appctx = self.get_appctx(pc)
+#        V = dmhooks.get_function_space(pc.getDM())
+#        h = CellDiameter(V.ufl_domain())
+#        delta = Constant(0.1) * avg(h)  #Get this through the appctx?
+#        self.gamma = appctx["gamma"]
+#        self.nu = appctx["nu"]
 #
-#        y.waxpy(1.0, c, a) #by changing 1.0 -> 0.0 everything reduces to the old one (DGMassInv)
-
-        """ This is the old approximation for when there is no stabilisation (C=0)"""
-#        self.massinv.mult(x, y)
-#        scaling = float(self.nu) + float(self.gamma)
-#        y.scale(-scaling)
+#        # get function spaces
+#        u = TrialFunction(V)
+#        v = TestFunction(V)
+#        #For the first option
+#        schur_approx_inv = assemble(Tensor((1./self.gamma)*inner(u, v)*dx + inner(delta*jump(u), jump(v))*dS).inv)   #This one does not work
+#        self.schur_approx_inv = schur_approx_inv.petscmat
+#
+#        #For the second option
+#        massinv = assemble(Tensor(inner(u, v)*dx).inv)
+#        self.massinv = massinv.petscmat
+#        C_stab = assemble(delta * inner(jump(u), jump(v))*dS)
+#        self.C_stab = C_stab.petscmat
+#        self.workspace = [self.massinv.createVecLeft() for i in (0, 1, 2)]
+#
+#    def apply(self, pc, x, y):
+#        """ Option 1: The Schur complement inverse is approximated as:
+#        -(C + (1 / gamma) * M)^{-1}
+#        """
+#        #Does not work
+#        self.schur_approx_inv.mult(x, y)
+#
+#        """ Option 2: The Schur complement inverse is approximated as:
+#        -(nu + gamma) * M^{-1} + nu * gamma * M^{-1} * C * M^{-1}
+#        """
+#        #Does not work (possitive gamma makes things worse -> more iterations)
+##        a, b, c = self.workspace
+##        self.massinv.mult(x, a)
+##        self.C_stab.mult(a, b)
+##        self.massinv.mult(b, c)
+##        c.scale(float(self.nu*self.gamma))
+##
+##        a.scale(-float(self.nu) - float(self.gamma))
+##
+##        y.waxpy(1.0, c, a) #by changing 1.0 -> 0.0 everything reduces to the old one (DGMassInv)
+#
+#        """ This is the old approximation for when there is no stabilisation (C=0)"""
+##        self.massinv.mult(x, y)
+##        scaling = float(self.nu) + float(self.gamma)
+##        y.scale(-scaling)
 
 
 class NonNewtonianSolver(object):
@@ -921,7 +938,9 @@ class NonNewtonianSolver(object):
             "ksp_type": "preonly",
             "pc_type": "python",
 #            "pc_python_type": "alfi.solver.DGMassInv"
-            "pc_python_type": "alfi_3f.solver.P1P0SchurPC"
+            "pc_python_type": "alfi_3f.solver.P1P0SchurPC",
+            "aux_pc_type": "bjacobi",
+            "aux_sub_pc_type": "icc",
         }
 
         use_mg = self.solver_type == "almg"
