@@ -14,73 +14,104 @@ import pprint
 import sys
 from datetime import datetime
 
-class P1P0SchurPC(AuxiliaryOperatorPC):
+#class P1P0SchurPC(AuxiliaryOperatorPC):
+#    """ This one is for the problem without augmentation"""
+#
+#    def form(self, pc, test, trial):
+#
+#        appctx = self.get_appctx(pc)
+#        gamma = appctx["gamma"]
+#        nu = appctx["nu"]
+#        delta = appctx["delta"]
+#        discretisation = appctx["discretisation"]
+#
+#        if discretisation == "th":
+#            a =   1/nu * inner(test, trial) * dx
+#        elif discretisation == "p1p0":
+#            a =  (
+#                  + 1/nu * inner(test, trial) * dx
+#                  + inner(avg(delta)*jump(test), jump(trial)) * dS
+#                  )
+#        bcs = None
+#        return (a, bcs)
 
-    def form(self, pc, test, trial):
+class P1P0SchurALPC(DGMassInv):
+    """ Option 3: The Schur complement inverse is approximated as:
+        ( -1/nu*M - C)^{-1} * (I - gamma * C * M^{-1}) - gamma * M^{-1}"""
+
+    def initialize(self, pc):
+        from firedrake.assemble import allocate_matrix, create_assembly_callable
+        if pc.getType() != "python":
+            raise ValueError("Expecting PC type python")
+        prefix = pc.getOptionsPrefix() + "al_"
+        _, P = pc.getOperators()
 
         appctx = self.get_appctx(pc)
+        fcp = appctx.get("form_compiler_parameters")
         V = dmhooks.get_function_space(pc.getDM())
         h = CellDiameter(V.ufl_domain())
-        delta = Constant(0.1) * avg(h)  #Get this through the appctx?
-        gamma = appctx["gamma"] #not used for now
-        nu = appctx["nu"]
+#        delta = appctx["delta"]
+        delta = Constant(0.1) * h
+        self.gamma = appctx["gamma"]
+        self.nu = appctx["nu"]
+#        self.discretisation = appctx["discretisation"]
 
-        a = 1/nu * inner(test, trial) * dx
-        a += inner(delta*jump(test), jump(trial)) * dS
-        bcs = None
+        # get function spaces
+        u = TrialFunction(V)
+        v = TestFunction(V)
 
-        return (a, bcs)
+        schur_orig = -1./self.nu * inner(u,v) * dx - inner(avg(delta)*jump(u), jump(v)) * dS #The Schur complement for the system without augmentation
+        c_stab = inner(avg(delta) * jump(u), jump(v))*dS
+        self.massinv = assemble(Tensor(inner(u, v)*dx).inv)
+        #Or With a minus?
+#        schur_orig = 1./self.nu * inner(u,v) * dx + inner(delta*jump(u), jump(v)) * dS
 
-#class P1P0SchurPC(DGMassInv):
-#
-#    def initialize(self, pc):
-#        _, P = pc.getOperators()
-#        appctx = self.get_appctx(pc)
-#        V = dmhooks.get_function_space(pc.getDM())
-#        h = CellDiameter(V.ufl_domain())
-#        delta = Constant(0.1) * avg(h)  #Get this through the appctx?
-#        self.gamma = appctx["gamma"]
-#        self.nu = appctx["nu"]
-#
-#        # get function spaces
-#        u = TrialFunction(V)
-#        v = TestFunction(V)
-#        #For the first option
-#        schur_approx_inv = assemble(Tensor((1./self.gamma)*inner(u, v)*dx + inner(delta*jump(u), jump(v))*dS).inv)   #This one does not work
-#        self.schur_approx_inv = schur_approx_inv.petscmat
-#
-#        #For the second option
-#        massinv = assemble(Tensor(inner(u, v)*dx).inv)
-#        self.massinv = massinv.petscmat
-#        C_stab = assemble(delta * inner(jump(u), jump(v))*dS)
-#        self.C_stab = C_stab.petscmat
-#        self.workspace = [self.massinv.createVecLeft() for i in (0, 1, 2)]
-#
-#    def apply(self, pc, x, y):
-#        """ Option 1: The Schur complement inverse is approximated as:
-#        -(C + (1 / gamma) * M)^{-1}
-#        """
-#        #Does not work
-#        self.schur_approx_inv.mult(x, y)
-#
-#        """ Option 2: The Schur complement inverse is approximated as:
-#        -(nu + gamma) * M^{-1} + nu * gamma * M^{-1} * C * M^{-1}
-#        """
-#        #Does not work (possitive gamma makes things worse -> more iterations)
-##        a, b, c = self.workspace
-##        self.massinv.mult(x, a)
-##        self.C_stab.mult(a, b)
-##        self.massinv.mult(b, c)
-##        c.scale(float(self.nu*self.gamma))
-##
-##        a.scale(-float(self.nu) - float(self.gamma))
-##
-##        y.waxpy(1.0, c, a) #by changing 1.0 -> 0.0 everything reduces to the old one (DGMassInv)
-#
-#        """ This is the old approximation for when there is no stabilisation (C=0)"""
-##        self.massinv.mult(x, y)
-##        scaling = float(self.nu) + float(self.gamma)
-##        y.scale(-scaling)
+        opts = PETSc.Options()
+        # we're inverting S_orig and using matfree to apply C_stab
+        default = parameters["default_matrix_type"]
+        S_orig_mat_type = opts.getString(prefix+"So_mat_type", default)
+        C_stab_mat_type = opts.getString(prefix+"Cs_mat_type", "matfree")
+
+        S_orig = assemble(schur_orig, form_compiler_parameters=fcp,
+                      mat_type=S_orig_mat_type,
+                      options_prefix=prefix + "So_")
+
+        Sksp = PETSc.KSP().create(comm=pc.comm)
+        Sksp.incrementTabLevel(1, parent=pc)
+        Sksp.setOptionsPrefix(prefix + "So_")
+        Sksp.setOperators(S_orig.petscmat)
+        Sksp.setUp()
+        Sksp.setFromOptions()
+        self.Sksp = Sksp
+
+        self.C_stab = allocate_matrix(c_stab, form_compiler_parameters=fcp,
+                                  mat_type=C_stab_mat_type,
+                                  options_prefix=prefix + "Cs_")
+        _assemble_C_stab = create_assembly_callable(c_stab, tensor=self.C_stab,
+                                                     form_compiler_parameters=fcp,
+                                                     mat_type=C_stab_mat_type)
+        _assemble_C_stab()
+        Cstabmat = self.C_stab.petscmat
+        self.workspace = [Cstabmat.createVecLeft() for i in (0, 1, 2, 3)]
+
+    def apply(self, pc, x, y):
+
+        a, b, c, d = self.workspace
+        self.massinv.petscmat.mult(x, a)  #a = -gamma * M^{-1}
+        a.scale(-float(self.gamma))
+        self.C_stab.petscmat.mult(a, b)   #b = C * a
+        c.waxpy(1.0, x, b)                #c = x + b  #Should be negligible if gamma is large
+        self.Sksp.solve(c, d)             #d = S^{-1} * c
+        y.waxpy(1.0, d, a)                #y = d + a
+        y.scale(-1.0)
+        #With a minus
+#        a, b, c, d = self.workspace
+#        self.massinv.petscmat.mult(x, a)  #a = gamma * M^{-1}
+#        a.scale(float(self.gamma))
+#        self.C_stab.petscmat.mult(a, b)   #b = C * a
+#        c.waxpy(1.0, x, b)                #c = x + b  #Should be negligible if gamma is large
+#        self.Sksp.solve(c, d)             #d = S^{-1} * c
+#        y.waxpy(1.0, d, a)                #y = d + a
 
 
 class NonNewtonianSolver(object):
@@ -937,10 +968,13 @@ class NonNewtonianSolver(object):
         fieldsplit_1 = {
             "ksp_type": "preonly",
             "pc_type": "python",
-#            "pc_python_type": "alfi.solver.DGMassInv"
-            "pc_python_type": "alfi_3f.solver.P1P0SchurPC",
-            "aux_pc_type": "bjacobi",
-            "aux_sub_pc_type": "icc",
+#            "pc_python_type": "alfi.solver.DGMassInv",
+#            "pc_python_type": "alfi_3f.solver.P1P0SchurPC",
+#            "aux_pc_type": "bjacobi",#For P1P0SchurPC
+#            "aux_sub_pc_type": "icc",#For P1P0SchurPC
+            "pc_python_type": "alfi_3f.solver.P1P0SchurALPC",
+            "al_So_ksp_type": "preonly",
+            "al_So_pc_type": "lu",
         }
 
         use_mg = self.solver_type == "almg"
