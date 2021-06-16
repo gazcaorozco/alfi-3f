@@ -49,6 +49,8 @@ def get_default_parser():
                         action="store_true")
     parser.add_argument("--paraview", dest="paraview", default=False,
                         action="store_true")
+#    parser.add_argument("--monitor-energy", dest="monitor_energy", default=False,
+#                        action="store_true")
     parser.add_argument("--const-rel-output", dest="const_rel_output", default=False,
                         action="store_true")
     parser.add_argument("--restriction", dest="restriction", default=False,
@@ -187,6 +189,7 @@ def get_solver(args, problem, hierarchy_callback=None):
         low_accuracy=args.low_accuracy,
         hierarchy_callback=hierarchy_callback,
         no_convection=args.no_convection,
+#        monitor_energy=args.monitor_energy,
         exactly_div_free = True if args.discretisation in ["sv", "hdiv-ldg"] else False
     )
     return solver

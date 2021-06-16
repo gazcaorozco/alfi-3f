@@ -1,5 +1,5 @@
 // Gmsh project created on Fri Jun 14 17:33:52 2019
-lc = 0.4;
+lc = 0.3; //0.4
 SetFactory("OpenCASCADE");
 Point(1) = {-0, -0, -0, lc};
 Point(2) = {10, 0, 0, lc};
@@ -28,7 +28,7 @@ Field[1].NumPointsPerCurve = 100;
 
 Field[2] = Threshold;
 Field[2].InField = 1;
-Field[2].SizeMin = lc / 4;
+Field[2].SizeMin = lc / 2.5; //4
 Field[2].SizeMax = lc;
 Field[2].DistMin = 0.07;
 Field[2].DistMax = 0.18;
