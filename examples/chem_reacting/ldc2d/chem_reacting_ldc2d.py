@@ -89,12 +89,12 @@ if __name__ == "__main__":
 
     #Rheological parameters
     if args.rheol in ["synovial","synovial2"]:
-        alphas = [0.0,2.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
+        alphas = [0.0,2.0,3.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
         betas = [1e-4]; beta = Constant(betas[0])
         epss = [0.001]; eps = Constant(epss[0])
         nu_s = [0.5]; nu = Constant(nu_s[0])
-#        Pe_s = [100., 1000, 1e5]; Pe = Constant(Pe_s[0])
-        Pe_s = [1e4]; Pe = Constant(Pe_s[0])#For Kacanov
+        Pe_s = [100., 1000, 1e5]; Pe = Constant(Pe_s[0])
+#        Pe_s = [1e4]; Pe = Constant(Pe_s[0])#For Kacanov
 #        Pe_s = [500, 1e4]; Pe = Constant(Pe_s[0])#For Newton
 
     elif args.rheol == "power-law":
@@ -102,7 +102,8 @@ if __name__ == "__main__":
         betas = [1e-4]; beta = Constant(betas[0])
         epss = [0.001]; eps = Constant(epss[0])
         nu_s = [0.5]; nu = Constant(nu_s[0])
-        Pe_s = [1000.]; Pe = Constant(Pe_s[0])
+        Pe_s = [1000., 10000, 100000]; Pe = Constant(Pe_s[0])
+        Pe_s = [100000]; Pe = Constant(Pe_s[0])
 
     else:
         nu_s = [0.5]; nu = Constant(nu_s[0])
@@ -120,21 +121,32 @@ if __name__ == "__main__":
 #    results0 = run_solver(solver_,args, {"r": [2.0]})
 #    solver_.no_convection = False
 
-    if args.rheol == "power-law":
-        z_cop = solver_.z.copy(deepcopy=True)
-        def mymonitor(snes, it, norm):
-            x = snes.getSolution()
-            with z_cop.dat.vec_wo as y:
-                x.copy(y)
-            print("Energy of current solution: ")
-            c_, u_, p_ = z_cop.split()
+    z_cop = solver_.z.copy(deepcopy=True)
+    energies = []
+    def mymonitor(snes, it, norm):
+        x = snes.getSolution()
+        with z_cop.dat.vec_wo as y:
+            x.copy(y)
+        print("Energy of current solution: ")
+        c_, u_, p_ = z_cop.split()
+        if args.rheol == "power-law":
             energ = (solver_.eps/solver_.alpha) * solver_.nu * pow(solver_.beta +  (1./solver_.eps)*inner(sym(grad(u_)), sym(grad(u_))), 0.5*solver_.alpha) * dx
-            print(assemble(energ), float(solver_.alpha))
+        elif args.rheol == "synovial2":
+            D_ = sym(grad(u_))
+            energ = solver_.nu * solver_.beta * inner(D_,D_) * dx
+            energ += solver_.eps * solver_.nu * (1. - solver_.beta) * pow(1.0 + (1./solver_.eps)*inner(D_,D_), exp(-solver_.alpha*c_) + 1.0) * dx
+        energ_ = assemble(energ)
+        energies.append(energ_)
+        print(energ_, float(solver_.alpha))
 
+    if args.rheol in ["power-law", "synovial2"]:
         solver_.solver.snes.setMonitor(mymonitor)
 
     continuation_params = {"beta": betas, "eps": epss, "nu": nu_s, "alpha": alphas, "Pe": Pe_s}
     results = run_solver(solver_, args, continuation_params)
+
+    if args.rheol in ["power-law", "synovial2"]:
+        print(energies)
 
     if args.plots:
         k = solver_.z.sub(1).ufl_element().degree()
