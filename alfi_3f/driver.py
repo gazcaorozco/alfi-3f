@@ -21,7 +21,7 @@ def get_default_parser():
     parser.add_argument("--stabilisation-weight-u", type=float, default=None)
     parser.add_argument("--stabilisation-weight-t", type=float, default=None)
     parser.add_argument("--solver-type", type=str, default="almg",
-                        choices=["lu", "allu", "almg", "aljacobi", "alamg", "simple"])#, "lu-reg", "lu-p1"])
+                        choices=["lu", "allu", "almg", "aljacobi", "alamg", "lu-p1", "simple"])#, "lu-reg", "lu-p1"])
     parser.add_argument("--patch", type=str, default="macro",
                         choices=["star", "macro"])
     parser.add_argument("--patch-composition", type=str, default="additive",
