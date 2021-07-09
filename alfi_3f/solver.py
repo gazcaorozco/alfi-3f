@@ -1001,7 +1001,7 @@ class NonNewtonianSolver(object):
         if self.solver_type == "lu-p1":              #Own parameters for p1p1
             return {"snes_type": "newtonls",
                              "snes_max_it": 100,
-                             "snes_linesearch_type": "basic",#"l2",
+                             "snes_linesearch_type": "l2",#"l2",
                              "snes_linesearch_maxstep": 1.0,
                              "snes_linesearch_damping": 0.8,
                              "snes_monitor": None,
@@ -1009,7 +1009,8 @@ class NonNewtonianSolver(object):
                              "snes_converged_reason": None,
     #                         "snes_atol": 5e-7,  ################## nref2-3
                              "snes_atol": 1e-9,
-                             "snes_max_it": 100,
+                             "snes_divergence_tolerance": -1,
+                             "snes_max_it": 200,
                              "monitor_true_residual": None,
                              "ksp_monitor_true_residual": None,
                              "ksp_converged_reason": None,

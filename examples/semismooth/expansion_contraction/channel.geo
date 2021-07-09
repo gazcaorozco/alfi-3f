@@ -1,7 +1,8 @@
+//L=4, delta=0.5, h=2.0
 SetFactory("OpenCASCADE");
-L = 4.0;
-delta = 0.5;
-h = 2.0;
+L = 3.0;
+delta = 0.2;
+h = 1.2;
 //+
 Point(1) = {-0, 1.0, -0, 0.5};
 Point(2) = {L, 1.0, 0, 0.5};

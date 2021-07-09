@@ -12,7 +12,8 @@ class SemismoothExpansionContraction(NonNewtonianProblem_Sup):
         self.cr_form = cr_form
 
     def mesh(self, distribution_parameters):
-        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/channel_L_4.0_delta_0.5_h_2.0.msh", distribution_parameters=distribution_parameters)
+#        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/channel_L_4.0_delta_0.5_h_2.0.msh", distribution_parameters=distribution_parameters)
+        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/channel_L_3.0_delta_0.2_h_1.2.msh", distribution_parameters=distribution_parameters)
         return base
 
     def bcs(self, Z):
@@ -41,7 +42,7 @@ class SemismoothExpansionContraction(NonNewtonianProblem_Sup):
         elif self.cr_form == "semismoothActEuler":
             G =  sqrt(inner(S - self.eps*D,S - self.eps*D))*(D- self.eps*S) - (self.tau + 2.*self.nu*pow(inner(S - self.eps*D,S - self.eps*D),nn_1))*(S - self.eps*D)
         elif self.cr_form == "semismoothMAX":
-            G = PositivePart(sqrt(inner(S - self.eps*D,S - self.eps*D)) - ystress)*(S - self.eps*D) - (pow(inner(D - self.eps*S,D - self.eps*S),nn))*(ystress + PositivePart(sqrt(inner(S - self.eps*D,S - self.eps*D)) - ystress))*(D - self.eps*S)
+            G = PositivePart(sqrt(inner(S - self.eps*D,S - self.eps*D)) - ystress)*(S - self.eps*D) - 2.*self.nu*(pow(inner(D - self.eps*S,D - self.eps*S),nn))*(ystress + PositivePart(sqrt(inner(S - self.eps*D,S - self.eps*D)) - ystress))*(D - self.eps*S)
 #            G = Max(sqrt(inner(S - self.eps*D,S - self.eps*D)) - self.tau, 0)*(S - self.eps*D) - 2.*self.nu*sqrt(inner(S - self.eps*D, S - self.eps*D))*(D - self.eps*S)
         return G
 
@@ -76,12 +77,14 @@ class SemismoothExpansionContraction(NonNewtonianProblem_Sup):
 #================New aproach
             #Transition point (from data fit)
             y_tr = 0.99846 + (-1.001252 - 0.99846)/(1 + pow(tau_obj/0.484535, 0.47067))
-            print("y_tr=  ",float(y_tr))
+#            print("y_tr=  ",float(y_tr))
             C = tau_obj/y_tr
             aux = conditional(le(y,-((tau_obj)/C)),as_vector([(C/2.)*(1 - y**2) - tau_obj*(1+y),0]),as_vector([(C/2.)*(1 - (tau_obj/C)**2) - tau_obj*(1 - (tau_obj/C)),0]))
             sols = conditional(ge(y,(tau_obj/C)),as_vector([(C/2.)*(1 - y**2) - tau_obj*(1-y),0]),aux)
             norm_factor = (2.*C*C*C - 3.*C*C*tau_obj + tau_obj**3)/(6*C*C)
-            sols = sols/norm_factor
+#            sols = sols/norm_factor
+#            sols = sqrt(2.)*sols
+#            print("=========Pressure drop:   ",float(C))
         return sols
 
     def relaxation_direction(self): return "0+:1-"
@@ -89,9 +92,10 @@ class SemismoothExpansionContraction(NonNewtonianProblem_Sup):
     def interpolate_initial_guess(self, z):
         (x, y) = SpatialCoordinate(z.ufl_domain())
         driver = self.inflow_velocity(z.ufl_domain(), self.tau)
-        driver = as_vector([x+y,y])
+#        driver = as_vector([x+y,y])
         z.sub(1).interpolate(driver)
         ts = as_vector([5., 0., 5.])
+#        ts = as_vector([10., 0., 10.])
         z.sub(0).interpolate(ts)
 
 
@@ -109,11 +113,15 @@ if __name__ == "__main__":
     r = Constant(r_s[0])
 
     if args.cr == "semismoothMAX":
-        taus_1 = [0.5, 4., 5]#, 10, 20, 50]
+        taus_1 = [0.0, 0.5, 4., 5]#, 10]#, 20, 50]
+        taus_1 = [0.1, 0.5, 2.0, 4., 5, 10, 20, 30, 50]
+#        taus_1 = [0.5, 2.0]
         taus_2 = [taus_1[-1]]
         epss_0 = [0.2, 0.5, 1./60]
+        epss_0 = [0.1, 0.08, 1./60] #For old BCs
         zepss = [1000, 5000, 10000]
         epss_2 = [0.00008,0.00005,0.000035,0.00002]
+        epss_2 = [0.00008,0.00005,0.000035, 0.00003, 0.000025, 0.00002] #For old BCs
     elif args.cr == "semismoothBE":
         taus_1 = [0.5,2.,4.,5.]
 #        taus_2 = [5.,8.,15.,20.,30.,50.]
@@ -179,4 +187,4 @@ if __name__ == "__main__":
         SS_p1.rename("Stress")
         Du_p1.rename("Sym vel gradient")
 #        File("plots/sols_%s_P1_nref%i_r_%f_tau_%f_eps_%f.pvd"%(args.cr, args.nref, float(r), float(tau), float(eps))).write(SS_p1, Du_p1, u_p1, p_p1)
-        File("plots/norm_sols_%s_P1_nref%i_r_%f_tau_%f_eps_%f.pvd"%(args.cr, args.nref, float(r), float(tau), float(eps))).write(SS_p1, Du_p1, u_p1, p_p1)
+        File("plots/long/sols_%s_P1_nref%i_r_%f_tau_%f_eps_%f.pvd"%(args.cr, args.nref, float(r), float(tau), float(eps))).write(SS_p1, Du_p1, u_p1, p_p1)

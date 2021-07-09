@@ -1,4 +1,4 @@
-#python semismooth_cavity2d.py --patch star --mh uniform --k 1 --discretisation p1p1 --gamma 0 --solver-type lu --baseN 14 --stabilisation-type-u none --no-convection --cr semismoothActEuler --nref 3 --plots
+#python semismooth_cavity2d.py --patch star --mh uniform --k 1 --discretisation p1p1 --gamma 0 --solver-type lu-p1 --baseN 14 --stabilisation-type-u none --no-convection --cr semismoothMAX --nref 3 --plots
 from firedrake import *
 from alfi_3f import *
 
@@ -16,8 +16,7 @@ class SemismoothCavity2d(NonNewtonianProblem_Sup):
         self.cr_form = cr_form
 
     def mesh(self, distribution_parameters):
-        base = RectangleMesh(self.baseN, self.baseN, 2, 2, distribution_parameters=distribution_parameters, diagonal = self.diagonal)
-#        base = RectangleMesh(self.baseN, self.baseN, 2, 2)
+        base = RectangleMesh(self.baseN, self.baseN, 1, 1, distribution_parameters=distribution_parameters, diagonal = self.diagonal)
         return base
 
     def bcs(self, Z):
@@ -53,7 +52,7 @@ class SemismoothCavity2d(NonNewtonianProblem_Sup):
         elif self.cr_form == "semismoothActEuler":
             G =  sqrt(inner(S - self.eps*D,S - self.eps*D))*(D- self.eps*S) - (self.tau + 2.*self.nu*pow(inner(S - self.eps*D,S - self.eps*D),nn_1))*(S - self.eps*D)
         elif self.cr_form == "semismoothMAX":
-            G = PositivePart(sqrt(inner(S - self.eps*D,S - self.eps*D)) - ystress)*(S - self.eps*D) - (pow(inner(D - self.eps*S,D - self.eps*S),nn))*(ystress + PositivePart(sqrt(inner(S - self.eps*D,S - self.eps*D)) - ystress))*(D - self.eps*S)
+            G = PositivePart(sqrt(inner(S - self.eps*D,S - self.eps*D)) - ystress)*(S - self.eps*D) - 2.*self.nu*(pow(inner(D - self.eps*S,D - self.eps*S),nn))*(ystress + PositivePart(sqrt(inner(S - self.eps*D,S - self.eps*D)) - ystress))*(D - self.eps*S)
 #            G = Max(sqrt(inner(S - self.eps*D,S - self.eps*D)) - self.tau, 0)*(S - self.eps*D) - 2.*self.nu*sqrt(inner(S - self.eps*D, S - self.eps*D))*(D - self.eps*S)
         return G
 
@@ -78,16 +77,17 @@ class SemismoothCavity2d(NonNewtonianProblem_Sup):
         #if self.regularised:
         driver = as_vector([x*x*(2-x)*(2-x)*(0.25*y*y), 0])
         #else:
-#        driver = as_vector([1.0, 0.0])
+        driver = as_vector([1.0, 0.0])
         return driver
 
     def relaxation_direction(self): return "0+:1-"
 
     def interpolate_initial_guess(self, z):
         (x, y) = SpatialCoordinate(z.ufl_domain())
-#        driver = as_vector([x*x*(2-x)*(2-x)*(0.25*y*y), x + 20.*y*y]) #Works with (tau) = [0.5]
-        driver = self.driver(z.ufl_domain())
-        z.sub(1).interpolate(driver)
+        driver = as_vector([x*x*(2-x)*(2-x)*(0.25*y*y), x + 20.*y*y]) #Works with (tau) = [0.5]
+        driver = as_vector([x*x*(1-x)*(1-x)*(y*y), x*y*(1-x)*(1-y)]) #Works with (tau) = [0.5]
+#        driver = self.driver(z.ufl_domain())
+#        z.sub(1).interpolate(driver)
         ts = as_vector([5., 0., 5.])
         z.sub(0).interpolate(ts)
 
@@ -102,7 +102,7 @@ if __name__ == "__main__":
                         choices=["newtonian", "semismoothBE", "semismoothActEuler", "implicitBE", "BE", "semismoothMAX"])
     args, _ = parser.parse_known_args()
 
-    nu = Constant(0.5)
+    nu = Constant(1.0)
 
     r_s = [2.0]
     #Tests
@@ -113,12 +113,13 @@ if __name__ == "__main__":
 
     if args.cr == "semismoothBE":
         taus_1 = [0.5,2.]#,4.]
+        taus_1 = [0.1, 0.5, 4., 5, 7.5, 10]#, 20, 50]
 #        taus_1 = [0.]
         taus_2 = [5.,8.,15.,20.,30.,50.]
         taus_2 = [taus_1[-1]]
         epss_0 = [0.5, 1./60]
         zepss = [1000, 10000]
-        epss_2 = [0.00001]
+        epss_2 = [0.00002]
 #        epss_2 = [0.00008,0.00005,0.000035,0.00002,0.00001]
     elif args.cr == "BE":
         taus_1 = [0.5, 4.]
@@ -128,9 +129,10 @@ if __name__ == "__main__":
         epss_2 = [1./zepss[-1]]
     elif args.cr == "implicitBE":
         taus_1 = [0.5, 4.]
+        taus_1 = [0.1, 0.5, 4., 5, 7.5, 10, 20, 40]
         taus_2 = [taus_1[-1]]
         epss_0 = [0.5, 1./20, 1./50]
-        zepss = list(range(100, 1000 + 100, 100))
+        zepss = list(range(100, 1000 + 100, 100)) + list(range(2000, 5000 + 1000, 1000))
         epss_2 = [1./zepss[-1]]
     elif args.cr == "semismoothActEuler":
         taus_1 = [0.5]
@@ -141,17 +143,20 @@ if __name__ == "__main__":
         zepss =  list(range(100, 1000+10, 10))
         epss_2 = [1./zepss[-1]]
     elif args.cr == "semismoothMAX":
-        taus_1 = [0.5, 4., 5]#, 10, 20, 50]
+        taus_1 = [0.05,0.1, 0.5, 3., 4., 5, 8, 10, 20, 30, 31, 32, 33, 34, 35, 36, 36.5, 37, 37.5, 38, 39, 40]#, 50]
 #        taus_1 = [0.]
         taus_2 = [4.5,5.]#,8.,15.,20.,30.,50.]
 #        taus_2 = [10.,20.]
         taus_2 = [taus_1[-1]]
-        epss_0 = [0.2, 0.5, 1./60] #Works with constant parameters
+        epss_0 = [0.15, 1./60]
 #        epss_0 = [0.5, 1./30, 1./45, 1./60]
-        zepss = [1000, 5000, 10000] #Works with constant parameters
-#        zepss = [200, 500, 650, 800, 810, 825, 850, 900, 950, 1000, 5000, 10000]
-        epss_2 = [0.00008,0.00005,0.000035,0.00002]#,0.00001] #Works with constant parameters
+        zepss = [65, 75, 85, 100, 500, 600, 750, 850, 1000, 5000, 10000]
+        epss_2 = [0.00009, 0.00008, 0.000065, 0.00005, 0.00004]#, 0.000035,0.000021]#,0.00001] #Works with constant parameters
 #        epss_2 = []
+#For tests
+        epss_0 = [0.1, 1./40, 1./60]
+        zepss = list(range(100, 1000 + 100, 100)) + list(range(2000, 50000 + 1000, 1000))
+        epss_2 = [0.00002]
     else:
         taus_1 = [0.]
         taus_2 = [taus_1[-1]]
@@ -162,12 +167,20 @@ if __name__ == "__main__":
     eps = Constant(epss_0[0])
     tau = Constant(taus_1[0])
 
+    #Newtonian first
+    problem_0 = SemismoothCavity2d(args.baseN,r=r,nu=nu,eps=eps,tau=tau,cr_form="newtonian",diagonal=args.diagonal)
+    solver_0 = get_solver(args, problem_0)
+    rslts_0 = run_solver(solver_0, args, {"nu": [float(nu)]})
+    S_, u_, p_ = solver_0.z.split()
 
     problem_Sup = SemismoothCavity2d(args.baseN,r=r,nu=nu,eps=eps,tau=tau,cr_form=args.cr,diagonal=args.diagonal)
-
     solver_Sup = get_solver(args, problem_Sup)
 
     problem_Sup.interpolate_initial_guess(solver_Sup.z)
+###    solver_Sup.z.sub(0).assign(S_)
+    solver_Sup.z.sub(1).assign(u_)
+#    solver_Sup.z.sub(2).assign(p_)
+#    solver_Sup.z.sub(0).interpolate(as_vector([5., 0., 5.]))
 
 
     continuation_params_0 = {"nu": [float(nu)],"tau": taus_1,"r": r_s,"eps": epss_0}
@@ -188,6 +201,43 @@ if __name__ == "__main__":
 #    else:
 #        results_3 = run_solver(solver_Sup, args, continuation_params_3)
 
+
+    #==== Compute vorticity and stream function =====#
+    _, u, _ = solver_Sup.z.split()
+    # Compute vorticity by L2 projection
+    print("Solving for the vorticity...")
+    QQ = FunctionSpace(solver_Sup.z.ufl_domain(), "DG", 0)
+    vv = TrialFunction(QQ)
+    vv_ = TestFunction(QQ)
+    PP = FunctionSpace(solver_Sup.z.ufl_domain(), "CG", 1)
+    ww = TrialFunction(PP)
+    ww_ = TestFunction(PP)
+    a = vv*vv_*dx
+#    L = (u[0].dx(1) - u[1].dx(0))*s*dx
+    L = (Dx(u[0],1) - Dx(u[1],0))*vv_*dx
+    vort = Function(QQ)
+    solve(a == L, vort, solver_parameters={"ksp_type": "preonly", "ksp_max_it": 1, "pc_type": "lu", "pc_factor_mat_solver_type": "mumps", "mat_mumps_icntl_14": 150})
+    # Compute stream function
+    # Laplace(psi) = -vort
+    print("Solving for the stream function...")
+    h = CellDiameter(solver_Sup.z.ufl_domain())
+    n = FacetNormal(solver_Sup.z.ufl_domain())
+    a = inner(grad(ww), grad(ww_))*dx - inner(avg(grad(ww)), 2*avg(outer(ww_,n)))*dS - inner(avg(grad(ww_)), 2*avg(outer(ww,n)))*dS
+    a += Constant(10.)/avg(h) * inner(2*avg(outer(ww,n)), 2*avg(outer(ww_,n))) * dS
+    L = vort*ww_*dx
+    psi = Function(PP)
+    wall = DirichletBC(PP, Constant(0.), "on_boundary")
+    solve(a == L, psi, bcs=wall, solver_parameters={"ksp_type": "preonly", "ksp_max_it": 1, "pc_type": "lu", "pc_factor_mat_solver_type": "mumps", "mat_mumps_icntl_14": 150, "ksp_monitor_true_residual": None})
+
+    #Min...
+    with vort.dat.vec_ro as w:
+        print("Maximum of vorticity: ", w.max())
+        print("Minimum of vorticity: ", w.min())
+
+    with psi.dat.vec_ro as w:
+        print("Maximum of stream function: ", w.max())
+        print("Minimum of stream function: ", w.min())
+
     if args.plots:
         (S__p1, u_p1, p_p1) = solver_Sup.z.split()
         (S_p1_1,S_p1_2,S_p1_3) = split(S__p1)
@@ -198,6 +248,8 @@ if __name__ == "__main__":
         p_p1.rename("Pressure")
         SS_p1.rename("Stress")
         Du_p1.rename("Sym vel gradient")
-        File("plots2/sols_%s_P1_nref%i_r_%f_tau_%f_eps_%f.pvd"%(args.cr, args.nref, float(r), float(tau), float(eps))).write(SS_p1, Du_p1, u_p1, p_p1)
+        vort.rename("Vorticity")
+        psi.rename("Stream function")
+        File("plots2/sols_%s_P1_nref%i_r_%f_tau_%f_eps_%f.pvd"%(args.cr, args.nref, float(r), float(tau), float(eps))).write(SS_p1, Du_p1, u_p1, p_p1, vort, psi)
 #        File("plots_cavity2d/ystress0_sols_%s_P1_nref%i_r_%f_tau_%f_eps_%f.pvd"%(args.cr, args.nref, float(r), float(tau), float(eps))).write(SS_p1, Du_p1, u_p1, p_p1)
 #        File("plots_test/sols_%s_P1_nref%i_r_%f_tau_%f_eps_%f.pvd"%(args.cr, args.nref, float(r), float(tau), float(eps))).write(SS_p1, Du_p1, u_p1, p_p1)
