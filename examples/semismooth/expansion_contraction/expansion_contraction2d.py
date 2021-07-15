@@ -12,8 +12,8 @@ class SemismoothExpansionContraction(NonNewtonianProblem_Sup):
         self.cr_form = cr_form
 
     def mesh(self, distribution_parameters):
-#        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/channel_L_4.0_delta_0.5_h_2.0.msh", distribution_parameters=distribution_parameters)
-        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/channel_L_3.0_delta_0.2_h_1.2.msh", distribution_parameters=distribution_parameters)
+        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/channel_L_4.0_delta_0.5_h_2.0.msh", distribution_parameters=distribution_parameters)
+#        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/channel_L_3.0_delta_0.2_h_1.2.msh", distribution_parameters=distribution_parameters)
         return base
 
     def bcs(self, Z):
