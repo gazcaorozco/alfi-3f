@@ -36,7 +36,8 @@ class NonNewtonianSolver(object):
                  linearisation = "newton", low_accuracy = False, no_convection = False,
                  exactly_div_free = True, fluxes=None, ip_magic=5.0):
 
-        assert solver_type in {"almg", "allu", "lu", "aljacobi", "alamg", "simple"}, "Invalid solver type %s" % solver_type
+        assert solver_type in {"almg", "allu", "lu", "aljacobi", "alamg", "simple", "lu-hdiv", "allu-hdiv", "almg-hdiv"}, "Invalid solver type %s" % solver_type
+        if solver_type in {"lu-hdiv", "allu-hdiv", "almg-hdiv"}: assert problem.formulation in {"L-u-p", "L-S-u-p"}, "That solver_type only makes sense with L-u-p or L-S-u-p formulations"
         if stabilisation_type == "none":
             stabilisation_type = None
         assert stabilisation_type in {None, "gls", "supg", "burman", "burman-temp"}, "Invalid stabilisation type %s" % stabilisation_type  #"supg-temp"
@@ -751,7 +752,41 @@ class NonNewtonianSolver(object):
         if self.cycles is None:
             self.cycles = 3
 
-        ######### For tests  ##################
+        if self.high_accuracy:
+            tolerances = {
+                "ksp_rtol": 1.0e-12,
+                "ksp_atol": 1.0e-12,
+                "snes_rtol": 1.0e-10,
+                "snes_atol": 1.0e-10,
+                "snes_stol": 1.0e-10,
+            }
+        elif self.low_accuracy:
+            tolerances = {
+                "ksp_rtol": 1.0e-6,#1.0e-7,#
+                "ksp_atol": 1.0e-6,#1.0e-6,#
+                "snes_rtol": 1.0e-6,#1.0e-5#
+                "snes_atol": 1.0e-5,#1.0e-4$
+                "snes_stol": 1.0e-6,#1.0e-4$
+            }
+        else:
+            if self.tdim == 2:
+                tolerances = {
+                    "ksp_rtol": 1.0e-9,
+                    "ksp_atol": 1.0e-10,
+                    "snes_rtol": 1.0e-9,#10
+                    "snes_atol": 1.0e-8,
+                    "snes_stol": 1.0e-6,
+                }
+            else:
+                tolerances = {
+                    "ksp_rtol": 1.0e-8,
+                    "ksp_atol": 1.0e-8,
+                    "snes_rtol": 1.0e-8,
+                    "snes_atol": 1.0e-8,
+                    "snes_stol": 1.0e-6,
+                }
+
+################# For tests  #####################
         mg_levels_solver_jacobi = {
 #            "ksp_type": "fgmres",
             "ksp_type": "preonly",
@@ -762,7 +797,7 @@ class NonNewtonianSolver(object):
             "ksp_divtol": 1.0e10,
             "pc_type": "jacobi",
         }
-        ###################################################
+###################################################
 
         mg_levels_solver = {
             "ksp_type": "fgmres",
@@ -879,8 +914,10 @@ class NonNewtonianSolver(object):
                 "almg": fieldsplit_0_mg,
                 "aljacobi": fieldsplit_0_mg,
                 "alamg": fieldsplit_0_amg,
-                "lu-reg": None,
                 "lu": None,
+                "lu-hdiv": None,
+                "allu-hdiv": None,
+                "almg-hdiv": None,
                 "lu-p1": None,
                 "simple": None}[self.solver_type],
             "fieldsplit_1": fieldsplit_1,
@@ -891,7 +928,7 @@ class NonNewtonianSolver(object):
             outer_fieldsplit["pc_fieldsplit_1_fields"] = "2"
         if self.formulation_TSup or self.formulation_LSup:
             outer_fieldsplit["pc_fieldsplit_0_fields"] = "0,1,2"
-            outer_fieldsplit["pc_fieldsplit_1_fields"] = "3"
+            outer_fieldsplit["pc_fieldisplit_1_fields"] = "3"
 
         outer_simple = {
             "mat_type": "nest" if self.formulation_up else "aij",
@@ -931,48 +968,39 @@ class NonNewtonianSolver(object):
 #            "snes_view": None,
         }
 
-        if self.high_accuracy:
-            tolerances = {
-                "ksp_rtol": 1.0e-12,
-                "ksp_atol": 1.0e-12,
-                "snes_rtol": 1.0e-10,
-                "snes_atol": 1.0e-10,
-                "snes_stol": 1.0e-10,
-            }
-        elif self.low_accuracy:
-            tolerances = {
-                "ksp_rtol": 1.0e-6,#1.0e-7,#
-                "ksp_atol": 1.0e-6,#1.0e-6,#
-                "snes_rtol": 1.0e-6,#1.0e-5#
-                "snes_atol": 1.0e-5,#1.0e-4$
-                "snes_stol": 1.0e-6,#1.0e-4$
-            }
-        else:
-            if self.tdim == 2:
-                tolerances = {
-                    "ksp_rtol": 1.0e-9,
-                    "ksp_atol": 1.0e-10,
-                    "snes_rtol": 1.0e-9,#10
-                    "snes_atol": 1.0e-8,
-                    "snes_stol": 1.0e-6,
-                }
-            else:
-                tolerances = {
-                    "ksp_rtol": 1.0e-8,
-                    "ksp_atol": 1.0e-8,
-                    "snes_rtol": 1.0e-8,
-                    "snes_atol": 1.0e-8,
-                    "snes_stol": 1.0e-6,
-                }
+        #For the Hdiv formulations; we want to solve locally for the lifting of the jumps L
+        outer_sc = {
+            "snes_type": "newtonls",
+            "snes_max_it": 100,
+            "snes_linesearch_type": "basic",#"l2",
+            "snes_linesearch_maxstep": 1.0,
+            "snes_monitor": None,
+            "snes_linesearch_monitor": None,
+            "snes_converged_reason": None,
+            "ksp_type": "preonly",
+            "ksp_monitor_true_residual": None,
+            "ksp_converged_reason": None,
+            "pc_type": "python",
+            "pc_python_type": "firedrake.SCPC",
+            "pc_sc_eliminate_fields": "0",
+            "condensed_field_ksp_type": "fgmres",
+            "condensed_field_ksp_rtol": tolerances["ksp_rtol"],
+            "condensed_field_ksp_atol": tolerances["ksp_atol"],
+            "condensed_field": {
+                "lu-hdiv": outer_lu,
+                "allu-hdiv": outer_fieldsplit,
+                "almg-hdiv": outer_fieldsplit}[self.solver_type]
+        }
 
         outer_base = {**outer_base, **tolerances}
+        outer_sc = {**outer_sc, **tolerances}
 
         if self.solver_type == "lu":
             outer = {**outer_base, **outer_lu}
         elif self.solver_type == "simple":
             outer = {**outer_base, **outer_simple}
-        elif self.solver_type in ["lu-reg"]:
-            outer = {**outer_base, **outer_regularised}
+        elif self.solver_type in ["lu-hdiv", "allu-hdiv", "almg-hdiv"]:
+            outer = outer_sc
         else:
             outer = {**outer_base, **outer_fieldsplit}
 
@@ -1524,6 +1552,7 @@ class HDivSolver(NonNewtonianSolver):
                 + inner(2*avg(outer(u,n)), avg(LT)) * dS
                 + inner(G, ST) * dx
                 + inner(S, sym(grad(v))) * dx
+                - inner(avg(S), 2*avg(outer(v, n))) * dS
                 )
             if self.fluxes == "ldg":
                 jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form)
