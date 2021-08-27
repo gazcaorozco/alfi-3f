@@ -28,19 +28,19 @@ if args.fields in ["up", "Sup"] and args.discretisation in ["bdm1p0", "rt1p0"]:
 
 if args.variation == "r":
     #Constitutive parameters (to study variations in r)
-    nu_s = [0.5]
+    nu_s = [1.0]
     nu = Constant(nu_s[0])
     epss = [1e-4]
     eps = Constant(epss[0])
     r_s = []   ##The errors will be computed for the last element in each list
     #Shear-thickenning
-    r_s1 = [2.0]; r_s.append(r_s1)
-    r_s2 = [2.7]; r_s.append(r_s2)
-    r_s3 = [3.5]; r_s.append(r_s3)
-    ##Shear-thinning
     #r_s1 = [2.0]; r_s.append(r_s1)
-    #r_s2 = [1.8]; r_s.append(r_s2)
-    #r_s3 = [1.6]; r_s.append(r_s3)
+    #r_s2 = [2.7]; r_s.append(r_s2)
+    #r_s3 = [3.5]; r_s.append(r_s3)
+    ##Shear-thinning
+    r_s1 = [2.0]; r_s.append(r_s1)
+    r_s2 = [1.8]; r_s.append(r_s2)
+    r_s3 = [1.6]; r_s.append(r_s3)
     r = Constant(r_s[0][0])
 
     const_params_list = [{"nu": nu_s, "eps": epss, "r": r_s[0]}]
@@ -57,7 +57,7 @@ elif args.variation == "nu":
     if args.fields in ["up", "Sup"] and args.discretisation in ["bdm1p0", "rt1p0"]:
         r_s = [2.0]
     else:
-        r_s = [2.0, 1.8] #1.8,2.5
+        r_s = [2.0]#, 1.8] #1.8,2.5
     r = Constant(r_s[0])
     #Viscosities
     nu_s = []
@@ -99,6 +99,8 @@ comm = None
 hs = []
 for nref in range(1, args.nref+1):
     args.nref = nref
+    #Reset parameter to the initial value
+    setattr(problem_, list(params_to_check.keys())[0], Constant(list(params_to_check.values())[0][0]))
     solver_ = get_solver(args, problem_)
 #    solver_.gamma.assign(0.)
 
@@ -118,6 +120,9 @@ for nref in range(1, args.nref+1):
 
     for n in range(len(const_params_list)):
         Ra = list(params_to_check.values())[0][n]
+        #Make sure the appropriate parameters are used in the CR (for some reason we need this here...)
+        setattr(problem_, list(params_to_check.keys())[0], Constant(Ra))
+        setattr(solver_, list(params_to_check.keys())[0], Constant(Ra))
 
         solver_output = run_solver(solver_, args, const_params_list[n])
         z = solver_.z

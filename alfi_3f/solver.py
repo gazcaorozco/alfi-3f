@@ -987,6 +987,9 @@ class NonNewtonianSolver(object):
             "condensed_field_ksp_rtol": tolerances["ksp_rtol"],
             "condensed_field_ksp_atol": tolerances["ksp_atol"],
             "condensed_field": {
+                "lu": None,
+                "allu": None,
+                "almg": None,
                 "lu-hdiv": outer_lu,
                 "allu-hdiv": outer_fieldsplit,
                 "almg-hdiv": outer_fieldsplit}[self.solver_type]
@@ -1541,7 +1544,7 @@ class HDivSolver(NonNewtonianSolver):
                     sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
                 )
             elif self.fluxes == "mixed":
-                jmp_penalty = self.ip_penalty_jump(1., U_jmp, form=penalty_form) #try 1/avg(h)
+                jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form)
                 F += (
                     sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
                     - (sigma_*avg(h)) * inner(2*avg(S[i,j]*n[j]),avg(ST[i,j]*n[j])) * dS
@@ -1589,10 +1592,11 @@ class HDivSolver(NonNewtonianSolver):
                     abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],ST[i,j]*n[j])*ds(bid)
                 elif self.fluxes == "ldg":
                     jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
-                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
+                    abc = -inner(outer(v,n),S)*ds(bid) + inner(outer(u-g,n), LT)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
             elif self.formulation_Lup:
                 jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
-                abc = inner(outer(u-g,n), LT)*ds(bid)  + sigma*inner(jmp_penalty_bdry, outer(v,n))*ds(bid)
+                #abc = inner(outer(u-g,n), LT)*ds(bid)  + sigma*inner(jmp_penalty_bdry, outer(v,n))*ds(bid)
+                abc = sigma*inner(jmp_penalty_bdry, outer(v,n))*ds(bid)
                 if self.fluxes == "ldg":
                     abc -= inner(outer(v,n), G)*ds(bid)
                 elif self.fluxes == "ip":
@@ -1600,9 +1604,10 @@ class HDivSolver(NonNewtonianSolver):
             elif self.formulation_Sup:
                 if self.fluxes == "ldg":
                     jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
-                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
+                    #abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
+                    abc = -inner(outer(v,n),S)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
                 if self.fluxes == "mixed":
-                    jmp_penalty_bdry = self.ip_penalty_jump(1., U_jmp_bdry, form=form_) #Try with 1/h
+                    jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_) #Try with 1/h
                     abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],ST[i,j]*n[j])*ds(bid)
             elif self.formulation_up:
                 abc = -inner(outer(v,n),2*self.nu*sym(grad(u)))*ds(bid) - inner(outer(u-g,n),2*self.nu*sym(grad(v)))*ds(bid) + 2.*self.nu*(sigma/h)*inner(v,u-g)*ds(bid)
