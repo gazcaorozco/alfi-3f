@@ -127,8 +127,14 @@ class CarreauMMS_Lup(NonNewtonianProblem_Lup):
     def has_nullspace(self): return True
 
     def interpolate_initial_guess(self, z):
-        w_expr = self.exact_velocity(z.function_space())
-        z.sub(1).interpolate(w_expr)
+##        w_expr = self.exact_velocity(z.function_space())
+##        z.sub(1).interpolate(w_expr)
+        X = SpatialCoordinate(z.ufl_domain())
+        (x, y) = X
+        u = 2.*y*sin(pi*x)*sin(pi*y)*(x**2 - 1.) + pi*sin(pi*x)*cos(pi*y)*(x**2 -1.)*(y**2-1.)
+        v = -2.*x*sin(pi*x)*sin(pi*y)*(y**2 - 1.) - pi*cos(pi*x)*sin(pi*y)*(x**2 - 1.)*(y**2 - 1.)
+        u = replace(u, {X: 0.5 * X})
+        v = replace(v, {X: 0.5 * X})
 
     def const_rel(self, D):
         nr = (float(self.r) - 2.)/2.
@@ -321,10 +327,10 @@ class CarreauMMS_LSup(NonNewtonianProblem_LSup):
         return base
 
     def bcs(self, Z):
-        bcs_ = [DirichletBC(Z.sub(1), Constant((0.,0)), 1),
-                DirichletBC(Z.sub(1), Constant((0., 0.)), 2),
-                DirichletBC(Z.sub(1), Constant((0., 0.)), 3),
-                DirichletBC(Z.sub(1), self.exact_velocity(Z), 4)] #mesh: 1-left, 20-right, 3-bottom, 4-top
+        bcs_ = [DirichletBC(Z.sub(2), Constant((0.,0)), 1),
+                DirichletBC(Z.sub(2), Constant((0., 0.)), 2),
+                DirichletBC(Z.sub(2), Constant((0., 0.)), 3),
+                DirichletBC(Z.sub(2), self.exact_velocity(Z), 4)] #mesh: 1-left, 20-right, 3-bottom, 4-top
         return bcs_
 
     def has_nullspace(self): return True
@@ -341,6 +347,8 @@ class CarreauMMS_LSup(NonNewtonianProblem_LSup):
         nr = (float(self.r) - 2.)/2.
 #        nr2 = (2. - float(self.r))/(2.*(float(self.r) - 1.))
         G = pow(self.eps**2 + inner(D,D), nr)*D - (1./(2. * self.nu)) * S
+#        G = D - S
+        #G = S -  2. * self.nu * pow(inner(D,D), (float(self.r)-2.)/2)*D
         return G
 
     def exact_velocity(self, Z):
@@ -395,6 +403,7 @@ class CarreauMMS_LSup(NonNewtonianProblem_LSup):
         D = sym(grad(self.exact_velocity(Z)))
         nr = (float(self.r) - 2.)/2.
         S = 2. * self.nu * pow(self.eps**2 + inner(D,D), nr)*D
+        #S = 2. * self.nu * pow(inner(D,D), nr)*D
         return S
 
     def rhs(self, Z):

@@ -586,15 +586,15 @@ class NonNewtonianSolver(object):
         elif self.formulation_LSup:
             (L_,S_,u, p) = split(z)
             (LT_,ST_,v, q) = split(TestFunction(Z))
-            L = self.stress_to_matrix(L_)
-            LT = self.stress_to_matrix(LT_)
+            L = self.stress_to_matrix(L_, False)
+            LT = self.stress_to_matrix(LT_, False)
             fields["L"] = L
             fields["LT"] = LT
         elif self.formulation_Lup:
             (L_,u, p) = split(z)
             (LT_,v, q) = split(TestFunction(Z))
-            L = self.stress_to_matrix(L_)
-            LT = self.stress_to_matrix(LT_)
+            L = self.stress_to_matrix(L_, False)
+            LT = self.stress_to_matrix(LT_, False)
             fields["L"] = L
             fields["LT"] = LT
         elif self.formulation_up:
@@ -617,22 +617,22 @@ class NonNewtonianSolver(object):
 
         #Split stress variables appropriately
         if self.formulation_has_stress:
-            S = self.stress_to_matrix(S_)
-            ST = self.stress_to_matrix(ST_)
+            S = self.stress_to_matrix(S_, self.exactly_div_free)
+            ST = self.stress_to_matrix(ST_, self.exactly_div_free)
             fields["S"] = S
             fields["ST"] = ST
         return fields
 
-    def stress_to_matrix(self, S_):
+    def stress_to_matrix(self, S_, div_free=True):
         if self.tdim == 2:
-            if self.exactly_div_free:
+            if div_free:
                 (S_1,S_2) = split(S_)
                 S = as_tensor(((S_1,S_2),(S_2,-S_1)))
             else:
                 (S_1,S_2,S_3) = split(S_)
                 S = as_tensor(((S_1,S_2),(S_2,S_3)))
         else:
-            if self.exactly_div_free:
+            if div_free:
                 (S_1,S_2,S_3,S_4,S_5) = split(S_)
                 S = as_tensor(((S_1,S_2,S_3),(S_2,S_5,S_4),(S_3,S_4,-S_1-S_5)))
             else:
@@ -928,7 +928,7 @@ class NonNewtonianSolver(object):
             outer_fieldsplit["pc_fieldsplit_1_fields"] = "2"
         if self.formulation_TSup or self.formulation_LSup:
             outer_fieldsplit["pc_fieldsplit_0_fields"] = "0,1,2"
-            outer_fieldsplit["pc_fieldisplit_1_fields"] = "3"
+            outer_fieldsplit["pc_fieldsplit_1_fields"] = "3"
 
         outer_simple = {
             "mat_type": "nest" if self.formulation_up else "aij",
@@ -1520,7 +1520,7 @@ class HDivSolver(NonNewtonianSolver):
 
         #For the jump penalisation
         U_jmp = 2. * avg(outer(u,n))
-        penalty_form = "cr" #"plaw", "quadratic", "cr"
+        penalty_form = "plaw" #"plaw", "quadratic", "cr"
         sigma = Constant(self.ip_magic) * self.Z.sub(self.velocity_id).ufl_element().degree()**2
         sigma_ = Constant(0.5) * self.Z.sub(self.velocity_id).ufl_element().degree()**2  #Or take them equal??
 
@@ -1563,7 +1563,7 @@ class HDivSolver(NonNewtonianSolver):
                     sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
                 )
             elif self.fluxes == "mixed":
-                jmp_penalty = self.ip_penalty_jump(1., U_jmp, form=penalty_form) #try 1/avg(h)
+                jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form) #try 1/avg(h)
                 F += (
                     sigma * inner(jmp_penalty, 2*avg(outer(v, n))) * dS
                     - (sigma_*avg(h)) * inner(2*avg(S[i,j]*n[j]),avg(ST[i,j]*n[j])) * dS
@@ -1588,11 +1588,11 @@ class HDivSolver(NonNewtonianSolver):
             U_jmp_bdry = outer(u-g, n)
             if self.formulation_LSup:
                 if self.fluxes == "mixed":
-                    jmp_penalty_bdry = self.ip_penalty_jump(1., U_jmp_bdry, form=form_) #Try with 1/h
-                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],ST[i,j]*n[j])*ds(bid)
+                    jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_) #Try with 1/h
                 elif self.fluxes == "ldg":
                     jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
-                    abc = -inner(outer(v,n),S)*ds(bid) + inner(outer(u-g,n), LT)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
+                #abc = -inner(outer(v,n),S)*ds(bid) + inner(outer(u-g,n), LT)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
+                abc = -inner(outer(v,n),S)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
             elif self.formulation_Lup:
                 jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
                 #abc = inner(outer(u-g,n), LT)*ds(bid)  + sigma*inner(jmp_penalty_bdry, outer(v,n))*ds(bid)
@@ -1602,13 +1602,8 @@ class HDivSolver(NonNewtonianSolver):
                 elif self.fluxes == "ip":
                     abc -= inner(outer(v,n), S_rh)*ds(bid)
             elif self.formulation_Sup:
-                if self.fluxes == "ldg":
-                    jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_)
-                    #abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
-                    abc = -inner(outer(v,n),S)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
-                if self.fluxes == "mixed":
-                    jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_) #Try with 1/h
-                    abc = -inner(outer(v,n),S)*ds(bid) - inner(outer(u-g,n), ST)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid) #- (sigma_/h)*inner(S[i,j]*n[j],ST[i,j]*n[j])*ds(bid)
+                jmp_penalty_bdry = self.ip_penalty_jump(1./h, U_jmp_bdry, form=form_) #Chose 1/h for mixed fluxes
+                abc = -inner(outer(v,n),S)*ds(bid) + sigma*inner(outer(v,n), jmp_penalty_bdry)*ds(bid)
             elif self.formulation_up:
                 abc = -inner(outer(v,n),2*self.nu*sym(grad(u)))*ds(bid) - inner(outer(u-g,n),2*self.nu*sym(grad(v)))*ds(bid) + 2.*self.nu*(sigma/h)*inner(v,u-g)*ds(bid)
             return abc
@@ -1654,14 +1649,18 @@ class RTSolver(HDivSolver):
         eleth = FiniteElement("CG", mesh.ufl_cell(), k)
         if self.tdim == 2:
             eles = VectorElement("DG", mesh.ufl_cell(), k-1)
+            eleL = VectorElement("DG", mesh.ufl_cell(), k-1, dim=3)
         else:
             eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=5)
+            eleL = VectorElement("DG", mesh.ufl_cell(), k-1, dim=6)
         eleu = FiniteElement("RT", mesh.ufl_cell(), k, variant="integral")
         elep = FiniteElement("Discontinuous Lagrange", mesh.ufl_cell(), k-1)
-        if self.formulation_Sup or self.formulation_Lup:
+        if self.formulation_Sup:
             Z = FunctionSpace(mesh, MixedElement([eles,eleu,elep]))
+        elif self.formulation_Lup:
+            Z = FunctionSpace(mesh, MixedElement([eleL,eleu,elep]))
         elif self.formulation_LSup:
-            Z = FunctionSpace(mesh, MixedElement([eles,eles,eleu,elep]))
+            Z = FunctionSpace(mesh, MixedElement([eleL,eles,eleu,elep]))
         elif self.formulation_up:
             Z = FunctionSpace(mesh, MixedElement([eleu,elep]))
         elif self.formulation_TSup:
@@ -1677,14 +1676,18 @@ class BDMSolver(HDivSolver):
         eleth = FiniteElement("CG", mesh.ufl_cell(), k)
         if self.tdim == 2:
             eles = VectorElement("DG", mesh.ufl_cell(), k-1)
+            eleL = VectorElement("DG", mesh.ufl_cell(), k-1, dim=3)
         else:
             eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=5)
+            eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=6)
         eleu = FiniteElement("BDM", mesh.ufl_cell(), k, variant="integral")
         elep = FiniteElement("Discontinuous Lagrange", mesh.ufl_cell(), k-1)
-        if self.formulation_Sup or self.formulation_Lup:
+        if self.formulation_Sup:
             Z = FunctionSpace(mesh, MixedElement([eles,eleu,elep]))
+        elif self.formulation_Lup:
+            Z = FunctionSpace(mesh, MixedElement([eleL,eleu,elep]))
         elif self.formulation_LSup:
-            Z = FunctionSpace(mesh, MixedElement([eles,eles,eleu,elep]))
+            Z = FunctionSpace(mesh, MixedElement([eleL,eles,eleu,elep]))
         elif self.formulation_up:
             Z = FunctionSpace(mesh, MixedElement([eleu,elep]))
         elif self.formulation_TSup:

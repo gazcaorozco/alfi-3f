@@ -123,6 +123,7 @@ for nref in range(1, args.nref+1):
         #Make sure the appropriate parameters are used in the CR (for some reason we need this here...)
         setattr(problem_, list(params_to_check.keys())[0], Constant(Ra))
         setattr(solver_, list(params_to_check.keys())[0], Constant(Ra))
+        #problem_.interpolate_initial_guess(solver_.z)
 
         solver_output = run_solver(solver_, args, const_params_list[n])
         z = solver_.z
