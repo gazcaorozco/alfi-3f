@@ -168,25 +168,25 @@ if __name__ == "__main__":
 #    taus2 = [1.]
 
     #Continuation for small nu (needs advective stabilisation)
-    r2_s = [2.,2.5]
-    taus2 = [0.95,0.9,0.85,0.8,0.75,0.7,0.65,0.6,0.55,0.5]
-    epss2 = [1.,0.5,0.1,0.05,0.01,0.008,0.005]
-    nus2 = [2.,1.,0.5]
-    r_s = [2.0,1.8]
-    taus = [0.95,0.9]
-    epss = [1.,0.5,0.1,0.05,0.01,0.008,0.005]
-    res = [1, 10, 100] + list(range(200, 10000+200, 200))
-    nus = [2./re for re in res]
-    #Tests (this is better...)
-#    r2_s = [2.5]
-#    taus2 = [0.5]
-#    epss2 = [0.005]
-#    nus2 = [0.5]
-#    r_s = [1.8]
-#    taus = [0.9]
-#    epss = [0.005]
-#    res = [100,250] + list(range(500, 10000+500, 500))
+#    r2_s = [2.,2.5]
+#    taus2 = [0.95,0.9,0.85,0.8,0.75,0.7,0.65,0.6,0.55,0.5]
+#    epss2 = [1.,0.5,0.1,0.05,0.01,0.008,0.005]
+#    nus2 = [2.,1.,0.5]
+#    r_s = [2.0,1.8]
+#    taus = [0.95,0.9]
+#    epss = [1.,0.5,0.1,0.05,0.01,0.008,0.005]
+#    res = [1, 10, 100] + list(range(200, 10000+200, 200))
 #    nus = [2./re for re in res]
+    #Tests (this is better...)
+    r2_s = [2.5]
+    taus2 = [0.5]
+    epss2 = [0.005]
+    nus2 = [0.5]
+    r_s = [1.8]
+    taus = [0.9]
+    epss = [0.005]
+    res = [100,250] + list(range(500, 10000+500, 500))
+    nus = [2./re for re in res]
 
 ##    taus = [1.]
 #    #Continuation for small r

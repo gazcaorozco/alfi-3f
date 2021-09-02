@@ -74,6 +74,7 @@ class Carreau_ldc2d_Hdiv(NonNewtonianProblem_Lup): #This is ugly, but....
         nn2 = (self.r-2)/(2.)
         visc_diff2 = (2.*self.nu)*(1. - self.tau)
         S = visc_diff2*pow(1 + (1./self.eps)*inner(D,D),nn2)*D + 2.*self.nu*self.tau*D
+#        S = D
         return S
 
     def driver(self, domain):
@@ -114,7 +115,7 @@ if __name__ == "__main__":
     problem_up = pclass(args.baseN,r=r,nu=nu,eps=eps,tau=tau,diagonal=args.diagonal)
     solver_up = get_solver(args, problem_up)
 
-    problem_up.interpolate_initial_guess(solver_up.z)
+#    problem_up.interpolate_initial_guess(solver_up.z)
 
     #Test a simple problem
 #    r_s = [2.]
@@ -123,7 +124,7 @@ if __name__ == "__main__":
 #    taus = [1.]
 
     #Continuation for small nu (needs advective stabilisation)
-    r_s = [2.,2.5]
+    r_s = [2., 1.8, 1.6]
     taus = [0.95,0.9,0.85,0.8,0.75,0.7,0.65,0.6,0.55,0.5]
     epss = [1.,0.5,0.1,0.05,0.01,0.008,0.005]
     res = [1, 10, 100] + list(range(200, 10000+200, 200))

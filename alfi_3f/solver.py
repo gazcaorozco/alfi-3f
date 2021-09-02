@@ -1514,13 +1514,20 @@ class HDivSolver(NonNewtonianSolver):
             self.gamma * inner(div(u), div(v))*dx
             - p * div(v) * dx
             - div(u) * q * dx
-            - self.advect * dot(u ,div(outer(v,u)))*dx
-            + self.advect * dot(v('+')-v('-'), uflux_int_('+')-uflux_int_('-'))*dS
+            #----------  Old form --------------------#
+#            - self.advect * dot(u ,div(outer(v,u)))*dx
+            + self.advect * dot(v('+')-v('-'), uflux_int_('+')-uflux_int_('-'))*dS  #Upwinding
+            #----------  New form --------------------#
+            - self.advect * inner(outer(u,u), grad(v)) * dx
+            #+ 0.5 * self.advect * jump(u, n) * avg(dot(u, v)) * dS #This one should vanish
+#            + 0.5 * self.advect * dot(avg(u), jump(dot(u, v), n)) * dS
+#            + 0.5 * self.advect * dot(u, n) * dot(u, v) * ds
+#            + 0.5 * self.advect * abs(avg(dot(u, n))) * inner(2*avg(outer(u,n)), 2*avg(outer(v,n))) * dS
         )
 
         #For the jump penalisation
         U_jmp = 2. * avg(outer(u,n))
-        penalty_form = "plaw" #"plaw", "quadratic", "cr"
+        penalty_form = "cr" #"plaw", "quadratic", "cr"
         sigma = Constant(self.ip_magic) * self.Z.sub(self.velocity_id).ufl_element().degree()**2
         sigma_ = Constant(0.5) * self.Z.sub(self.velocity_id).ufl_element().degree()**2  #Or take them equal??
 
@@ -1609,11 +1616,19 @@ class HDivSolver(NonNewtonianSolver):
             return abc
 
         def c_bc(u, v, bid, g, advect):
+            #--------- Old form ---------------------#
             if g is None:
                 uflux_ext = 0.5*(inner(u,n)+abs(inner(u,n)))*u
             else:
                 uflux_ext = 0.5*(inner(u,n)+abs(inner(u,n)))*u + 0.5*(inner(u,n)-abs(inner(u,n)))*g
-            return advect * dot(v,uflux_ext)*ds(bid)
+            c_term = advect * dot(v,uflux_ext)*ds(bid)
+            #---------- New form ---------------------#
+#            if g is None:
+#                 c_term = 0.5 * advect * dot(u, n) * dot(u, v) * ds
+#            else:
+#                 c_term = 0.5 * advect * dot(u, n) * dot(u, v) * ds - 0.5 * advect * dot(g, n) * dot(u, v) * ds
+            return c_term
+#            return None
 
         exterior_markers = list(self.mesh.exterior_facets.unique_markers)
         for bc in self.bcs:
