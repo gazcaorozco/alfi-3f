@@ -6,6 +6,7 @@ from alfi_3f.problem import NonNewtonianProblem_up
 from alfi_3f.problem import NonNewtonianProblem_Tup
 from alfi_3f.problem import NonNewtonianProblem_Lup
 from alfi_3f.problem import NonIsothermalProblem_up
+from alfi_3f.problem import NonNewtonianProblem
 from alfi_3f.solver import ScottVogeliusSolver
 from alfi_3f.solver import P1P1Solver
 from alfi_3f.solver import P1P0Solver

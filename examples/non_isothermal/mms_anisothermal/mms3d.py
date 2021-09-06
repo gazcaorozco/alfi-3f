@@ -1,5 +1,5 @@
 from firedrake import *
-from implcfpc import *
+from alfi_3f import *
 import os
 
 class OBCavityMMS3D_up(GeneralisedBoussinesqProblem_up):
@@ -20,7 +20,7 @@ class OBCavityMMS3D_up(GeneralisedBoussinesqProblem_up):
 
     def bcs(self, Z):
         bcs = [DirichletBC(Z.sub(1), self.exact_solution(Z)[1], "on_boundary"),
-               DirichletBC(Z.sub(0), self.exact_solution(Z)[0], "on_boundary") 
+               DirichletBC(Z.sub(0), self.exact_solution(Z)[0], "on_boundary")
             ]
         return bcs
 
@@ -30,16 +30,16 @@ class OBCavityMMS3D_up(GeneralisedBoussinesqProblem_up):
         w_expr = self.exact_solution(z.function_space())[1]
         z.sub(1).interpolate(w_expr)
 
-    def const_rel(self, D, theta):    
+    def const_rel(self, D, theta):
         nr = (float(self.r) - 2.)/2.
         K = self.viscosity(theta)
-        S = K*pow(inner(D,D),nr)*D 
+        S = K*pow(inner(D,D),nr)*D
         return S
 
     def const_rel_picard(self,D,D0,theta):
         nr = (float(self.r) - 2.)/2.
         K = self.viscosity(theta)
-        S0 = K*pow(inner(D,D),nr)*D0 
+        S0 = K*pow(inner(D,D),nr)*D0
         return S0
 
     def const_rel_temperature(self, theta, gradtheta):
@@ -61,7 +61,7 @@ class OBCavityMMS3D_up(GeneralisedBoussinesqProblem_up):
         else:
             kappa = Constant(1.)
         return kappa
-        
+
     def exact_solution(self, Z):
         X = SpatialCoordinate(Z.mesh())
         (x, y, z) = X
@@ -105,7 +105,7 @@ class OBCavityMMS3D_Sup(GeneralisedBoussinesqProblem_Sup):
 
     def bcs(self, Z):
         bcs = [DirichletBC(Z.sub(2), self.exact_solution(Z)[2], "on_boundary"),
-                DirichletBC(Z.sub(0), self.exact_solution(Z)[0], "on_boundary") 
+                DirichletBC(Z.sub(0), self.exact_solution(Z)[0], "on_boundary")
             ]
         return bcs
 
@@ -115,11 +115,11 @@ class OBCavityMMS3D_Sup(GeneralisedBoussinesqProblem_Sup):
         w_expr = self.exact_solution(z.function_space())[2]
         z.sub(2).interpolate(w_expr)
 
-    def const_rel(self, S, D, theta):    
+    def const_rel(self, S, D, theta):
         nr = (float(self.r) - 2.)/2.
         nr2 = (2. - float(self.r))/(2.*(float(self.r) - 1.))
         K = self.viscosity(theta)
-        G = S - K*pow(inner(D,D),nr)*D 
+        G = S - K*pow(inner(D,D),nr)*D
 #        G = D - (1./(2.*K))*pow(inner(S/(2.*K),S/(2.*K)),nr2)*S
         return G
 
@@ -127,7 +127,7 @@ class OBCavityMMS3D_Sup(GeneralisedBoussinesqProblem_Sup):
         nr = (float(self.r) - 2.)/2.
         nr2 = (2. - float(self.r))/(2.*(float(self.r) - 1.))
         K = self.viscosity(theta)
-        G0 = S0 - K*pow(inner(D,D),nr)*D0 
+        G0 = S0 - K*pow(inner(D,D),nr)*D0
         G0 = D0 - (1./(2.*self.nu))*pow(inner(S/(2.*self.nu),S/(2.*self.nu)),nr2)*S0
         return G0
 
@@ -165,7 +165,7 @@ class OBCavityMMS3D_Sup(GeneralisedBoussinesqProblem_Sup):
         K = self.viscosity(theta)
         D = sym(grad(exact_vel))
         nr = (float(self.r) - 2.)/2.
-        S = K*pow(inner(D,D),nr)*D 
+        S = K*pow(inner(D,D),nr)*D
         return (theta, S, exact_vel, p)
 
     def rhs(self, Z):

@@ -1,8 +1,9 @@
-#python mms.py --dim 2 --fields Tup --gamma 0.0 --temp-dependent viscosity-conductivity --non-dimensional rayleigh1 --discretisation th --mh uniform --patch star --solver-type lu --k 2 --nref 2
+#python mms.py --patch macro --mh bary --k 2 --dim 2 --fields Tup --discretisation sv --thermal-conv natural_Ra --temp-dependent viscosity-conductivity --gamma 0.0 --solver-type lu --cycles 1 --smoothing 5 --stabilisation-type-u none --fluxes ip --nref 3
+
 from pprint import pprint
-from mms2d import OBCavityMMS_up, OBCavityMMS_Sup
-from mms3d import OBCavityMMS3D_up, OBCavityMMS3D_Sup
-from implcfpc import get_default_parser, get_solver, run_solver
+from mms2d import OBCavityMMS_Tup, OBCavityMMS_TSup, OBCavityMMS_LTup, OBCavityMMS_LTSup
+#from mms3d import OBCavityMMS3D_up, OBCavityMMS3D_Sup
+from alfi_3f import get_default_parser, get_solver, run_solver
 import os
 from firedrake import *
 import numpy as np
@@ -15,11 +16,9 @@ parser = get_default_parser()
 parser.add_argument("--dim", type=int, required=True,
                     choices=[2, 3])
 parser.add_argument("--fields", type=str, default="Tup",
-                        choices=["Tup", "TSup"])
+                        choices=["Tup", "TSup", "LTup", "LTSup"])
 parser.add_argument("--temp-dependent", type=str, default="viscosity-conductivity",
                         choices=["none","viscosity","viscosity-conductivity"])
-parser.add_argument("--non-dimensional", type=str, default="rayleigh1",
-                        choices=["rayleigh1"])
 args, _ = parser.parse_known_args()
 
 Ra_s = [1,1000,10000]#,20000]
@@ -28,28 +27,35 @@ Pr_s = [1.]
 Pr = Constant(Pr_s[0])
 Di_s = [0., 0.3]
 Di = Constant(Di_s[0])
-r_s = [2.0, 2.7, 3.5]
-#r_s = [2.0]
+r_s = [2.0, 2.7]#, 3.5]
+r_s = [2.0, 2.3, 2.7]#, 3.5]
+r_s = [2.0]
 #r_s = [2.0, 1.8, 1.6]
+if args.discretisation in ["bdm1p0", "rt1p0"] and args.fields == "Tup": r_s = [2.0]
 r = Constant(r_s[0])
 continuation_params = {"r": r_s,"Pr": Pr_s,"Di": Di_s,"Ra": Ra_s}
 
-if args.dim == 2:
-    if args.fields == "Tup":
-        problem_ = OBCavityMMS_up(baseN=args.baseN, temp_dependent=args.temp_dependent, non_dimensional=args.non_dimensional, Pr=Pr, Ra=Ra, r=r, Di=Di)
-    else:
-        problem_ = OBCavityMMS_Sup(baseN=args.baseN, temp_dependent=args.temp_dependent, non_dimensional=args.non_dimensional, Pr=Pr, Ra=Ra, r=r, Di=Di)
-else:
-    if args.fields == "Tup":
-        problem_ = OBCavityMMS3D_up(baseN=args.baseN, temp_dependent=args.temp_dependent, non_dimensional=args.non_dimensional, Pr=Pr, Ra=Ra, r=r, Di=Di)
-    else:
-        problem_ = OBCavityMMS3D_Sup(baseN=args.baseN, temp_dependent=args.temp_dependent, non_dimensional=args.non_dimensional, Pr=Pr, Ra=Ra, r=r, Di=Di)
-    
+problem_cl = {
+    2: {
+        "Tup": OBCavityMMS_Tup,
+        "TSup": OBCavityMMS_TSup,
+        "LTup": OBCavityMMS_LTup,
+        "LTSup": OBCavityMMS_LTSup,
+    },
+    3: {
+        "Tup": None,
+        "TSup": None,
+        "LTup": None,
+        "LTSup": None,
+    }
+}[args.dim][args.fields]
+
+problem_ = problem_cl(temp_dependent=args.temp_dependent, Pr=Pr, Ra=Ra, r=r, Di=Di)
 
 results = {}
 for Ra in [Ra_s[-1]]:
     results[Ra] = {}
-    for s in ["velocity", "velocitygrad", "pressure", "temperature", "temperaturegrad", "stress", "divergence", "relvelocity", "relvelocitygrad", "relpressure", "reltemperature", "reltemperaturegrad", "relstress"]:
+    for s in ["velocity", "velocitygrad", "pressure", "temperature", "temperaturegrad", "stress", "quasi-norm", "divergence", "relvelocity", "relvelocitygrad", "relpressure", "reltemperature", "reltemperaturegrad", "relstress", "relquasi-norm"]:
         results[Ra][s] = []
 comm = None
 hs = []
@@ -75,23 +81,23 @@ for nref in range(1, args.nref+1):
         solver_output = run_solver(solver_, args, continuation_params)
         z = solver_.z
         Z = z.function_space()
+
+        (theta_, u_, p_) = problem_.exact_solution(Z)
+        S_ = problem_.exact_stress(Z)
         if args.fields == "Tup":
             theta, u, p = z.split()
             S = problem_.const_rel(sym(grad(u)), theta)
-            (theta_, u_, p_) = problem_.exact_solution(Z)
-            S_ = problem_.const_rel(sym(grad(u_)), theta_)
-            
-        else:
+        elif args.fields == "TSup":
             theta, SS, u, p = z.split()
-            if solver_.exactly_div_free:
-                (S_1,S_2) = split(SS)
-                S = as_tensor(((S_1,S_2),(S_2,-S_1)))
-            else:
-                (S_1,S_2,S_3) = split(SS)
-                S = as_tensor(((S_1,S_2),(S_2,S_3)))
-
-            (theta_, S_, u_, p_) = problem_.exact_solution(Z)
-
+            S = solver_.stress_to_matrix(SS)
+        elif args.fields == "LTup":
+            _, theta, u, p = z.split()
+            S = problem_.const_rel(sym(grad(u)), theta) #TODO: Should we add L?
+        elif args.fields == "LTSup":
+            _, theta, SS, u, p = z.split()
+            S = solver_.stress_to_matrix(SS)
+        S_F_exact = problem_.quasi_norm(sym(grad(u_)))
+        S_F = problem_.quasi_norm(sym(grad(u)))
 
         veldiv = norm(div(u))
         pressureintegral = assemble(p_ * dx)
@@ -113,6 +119,8 @@ for nref in range(1, args.nref+1):
         theta__gradnorm = norm(grad(theta_))
         stresserr =  pow(assemble((pow((S[i,j] - S_[i,j])*(S[i,j] - S_[i,j]), r_exp_conj/2.))*dx), 1./r_exp_conj)
         stress__norm =  pow(assemble((pow(S_[i,j]*S_[i,j], r_exp_conj/2.))*dx), 1./r_exp_conj)
+        qnorm_error =  pow(assemble((pow((S_F[i,j] - S_F_exact[i,j])*(S_F[i,j] - S_F_exact[i,j]), r_exp_conj/2.))*dx), 1./r_exp_conj)
+        qnorm_norm =  pow(assemble((pow(S_F_exact[i,j]*S_F_exact[i,j], r_exp_conj/2.))*dx), 1./r_exp_conj)
 
         results[Ra]["velocity"].append(uerr)
         results[Ra]["velocitygrad"].append(ugraderr)
@@ -120,12 +128,14 @@ for nref in range(1, args.nref+1):
         results[Ra]["temperature"].append(thetaerr)
         results[Ra]["temperaturegrad"].append(gradthetaerr)
         results[Ra]["stress"].append(stresserr)
+        results[Ra]["quasi-norm"].append(qnorm_error)
         results[Ra]["relvelocity"].append(uerr/u__norm)
         results[Ra]["relvelocitygrad"].append(ugraderr/u__gradnorm)
         results[Ra]["relpressure"].append(perr/p__norm)
         results[Ra]["reltemperature"].append(thetaerr/theta__norm)
         results[Ra]["reltemperaturegrad"].append(gradthetaerr/theta__gradnorm)
         results[Ra]["relstress"].append(stresserr/stress__norm)
+        results[Ra]["relquasi-norm"].append(qnorm_error/qnorm_norm)
         results[Ra]["divergence"].append(veldiv)
         if comm.rank == 0:
             print("|div(u_h)| = ", veldiv)
@@ -143,18 +153,20 @@ if comm.rank == 0:
         print("convergence orders:", convergence_orders(results[Ra]["temperature"]))
         print("|stress-stress_h|", results[Ra]["stress"])
         print("convergence orders:", convergence_orders(results[Ra]["stress"]))
+        print("Lr' |Fstress-Fstress_h|", results[Ra]["quasi-norm"])
+        print("convergence orders:", convergence_orders(results[Ra]["quasi-norm"]))
     print("gamma =", args.gamma)
     print("h =", hs)
 
-    for Ra in [Ra_s[-1]]:
-        print("%%Ra = %i" % Ra)
-        print("\\pgfplotstableread[col sep=comma, row sep=\\\\]{%%")
-        print("hmin, havg, error_v, error_vgrad, error_p, error_th, error_thgrad, error_str, relerror_v, relerror_vgrad, relerror_p, relerror_th, relerror_thgrad, relerror_str, div\\\\")
-        for i in range(len(hs)):
-            print(",".join(map(str, [hs[i][0], hs[i][1], results[Ra]["velocity"][i], results[Ra]["velocitygrad"][i], results[Ra]["pressure"][i], results[Ra]["temperature"][i], results[Ra]["temperaturegrad"][i], results[Ra]["stress"][i], results[Ra]["relvelocity"][i], results[Ra]["relvelocitygrad"][i], results[Ra]["relpressure"][i], results[Ra]["reltemperature"][i], results[Ra]["reltemperaturegrad"][i], results[Ra]["relstress"][i], results[Ra]["divergence"][i]])) + "\\\\")
-        def numtoword(num):
-            return eng.number_to_words(num).replace(" ", "").replace("-","")
-        name = "Ra" + numtoword(int(Ra)) \
-            + "gamma" + numtoword(int(args.gamma)) \
-            + args.discretisation.replace("0", "zero")
-        print("}\\%s" % name)
+#    for Ra in [Ra_s[-1]]:
+#        print("%%Ra = %i" % Ra)
+#        print("\\pgfplotstableread[col sep=comma, row sep=\\\\]{%%")
+#        print("hmin, havg, error_v, error_vgrad, error_p, error_th, error_thgrad, error_str, relerror_v, relerror_vgrad, relerror_p, relerror_th, relerror_thgrad, relerror_str, div\\\\")
+#        for i in range(len(hs)):
+#            print(",".join(map(str, [hs[i][0], hs[i][1], results[Ra]["velocity"][i], results[Ra]["velocitygrad"][i], results[Ra]["pressure"][i], results[Ra]["temperature"][i], results[Ra]["temperaturegrad"][i], results[Ra]["stress"][i], results[Ra]["relvelocity"][i], results[Ra]["relvelocitygrad"][i], results[Ra]["relpressure"][i], results[Ra]["reltemperature"][i], results[Ra]["reltemperaturegrad"][i], results[Ra]["relstress"][i], results[Ra]["divergence"][i]])) + "\\\\")
+#        def numtoword(num):
+#            return eng.number_to_words(num).replace(" ", "").replace("-","")
+#        name = "Ra" + numtoword(int(Ra)) \
+#            + "gamma" + numtoword(int(args.gamma)) \
+#            + args.discretisation.replace("0", "zero")
+#        print("}\\%s" % name)
