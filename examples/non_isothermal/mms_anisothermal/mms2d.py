@@ -3,16 +3,17 @@ from alfi_3f import *
 import os
 
 class OBCavityMMS(NonNewtonianProblem):
-    def __init__(self, temp_dependent="viscosity-conductivity", **const_rel_params):
+    def __init__(self, temp_dependent="viscosity-conductivity", baseN=40, **const_rel_params):
         super().__init__(**const_rel_params)
         self.temp_dependent = temp_dependent
+        self.baseN = baseN
         self.vel_id = None
         self.temp_id = None
 
     def mesh(self, distribution_parameters):
-#        base = RectangleMesh(self.baseN, self.baseN, 1, 1, distribution_parameters=distribution_parameters, diagonal = self.diagonal)
-        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/square.msh",
-                    distribution_parameters=distribution_parameters)
+        base = RectangleMesh(self.baseN, self.baseN, 1, 1, distribution_parameters=distribution_parameters)
+#        base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/square.msh",
+#                    distribution_parameters=distribution_parameters)
         return base
 
     def bcs(self, Z):
@@ -65,9 +66,13 @@ class OBCavityMMS(NonNewtonianProblem):
         (x, y) = X
         u = 2.*y*sin(pi*x)*sin(pi*y)*(x**2 - 1.) + pi*sin(pi*x)*cos(pi*y)*(x**2 -1.)*(y**2-1.)
         v = -2.*x*sin(pi*x)*sin(pi*y)*(y**2 - 1.) - pi*cos(pi*x)*sin(pi*y)*(x**2 - 1.)*(y**2 - 1.)
+        #u = (1./4.)*(-2 + x)**2 * x**2 * y * (-2 + y**2) #For a 2x2 RectangleMesh
+        #v = -(1./4.)*x*(2 - 3*x + x**2)*y**2*(-4 + y**2)
         exact_vel = as_vector([u, v])
         p = y**2 - x**2
-        theta = x**2 - y**4
+        #p = -(1./128.)*(-2+x)**4*x**4*y**2*(8-2*y**2+y**4)+(x*y*(-15*x**3+3*x**4+10*x**2*y**2+20*(-2+y**2)-30*x*(-2+y**2)))/(5/0.5)
+        #p = p - 0.25*assemble(p*dx)
+        theta = x**2 + y**4 + cos(x)
         return (theta, exact_vel, p)
 
     def exact_stress(self, Z):
@@ -83,13 +88,16 @@ class OBCavityMMS(NonNewtonianProblem):
         D = sym(grad(u))
         S = self.exact_stress(Z)
         q = self.const_rel_temperature(theta, grad(theta))
-        f1 = -div(q) + div(u*theta) + self.Di*(theta + self.Theta)*dot(g, u) - (self.Di/self.Ra)*inner(S,D)
-        f2 = -self.Pr*div(S) + div(outer(u, u)) + grad(p) - (self.Ra*self.Pr)*theta*g
+        #f1 = -div(q) + div(u*theta) + self.Di*(theta + self.Theta)*dot(g, u) - (self.Di/self.Ra)*inner(S,D)
+        f1 = -div(grad(theta)) #+ div(u*theta)
+#        f1 = -div(grad(theta)) + div(u*theta) + self.Di*(theta + self.Theta)*dot(g, u) - (self.Di/self.Ra)*inner(D,D)
+        f2 = -div(D) + grad(p) #- theta*g
+        #f2 = -self.Pr*div(D) + div(outer(u, u)) + grad(p) - (self.Ra*self.Pr)*theta*g
         f3 = -div(u)
         return (f1, f2, f3)
 
 class OBCavityMMS_Tup(OBCavityMMS):
-    def __init__(self, temp_dependent="viscosity-conductivity", **params):
+    def __init__(self, temp_dependent="viscosity-conductivity", baseN=40, **params):
         super().__init__(temp_dependent=temp_dependent, **params)
         self.formulation = "T-u-p"
         self.vel_id = 1
@@ -106,7 +114,7 @@ class OBCavityMMS_Tup(OBCavityMMS):
         return S
 
 class OBCavityMMS_LTup(OBCavityMMS):
-    def __init__(self, temp_dependent="viscosity-conductivity", **params):
+    def __init__(self, temp_dependent="viscosity-conductivity", baseN=40, **params):
         super().__init__(temp_dependent=temp_dependent, **params)
         self.formulation = "L-T-u-p"
         self.vel_id = 2
@@ -123,7 +131,7 @@ class OBCavityMMS_LTup(OBCavityMMS):
         return S
 
 class OBCavityMMS_TSup(OBCavityMMS):
-    def __init__(self, temp_dependent="viscosity-conductivity", **params):
+    def __init__(self, temp_dependent="viscosity-conductivity", baseN=40, **params):
         super().__init__(temp_dependent=temp_dependent, **params)
         self.formulation = "T-S-u-p"
         self.vel_id = 2
@@ -142,7 +150,7 @@ class OBCavityMMS_TSup(OBCavityMMS):
         return G
 
 class OBCavityMMS_LTSup(OBCavityMMS):
-    def __init__(self, temp_dependent="viscosity-conductivity", **params):
+    def __init__(self, temp_dependent="viscosity-conductivity", baseN=40, **params):
         super().__init__(temp_dependent=temp_dependent, **params)
         self.formulation = "L-T-S-u-p"
         self.vel_id = 3

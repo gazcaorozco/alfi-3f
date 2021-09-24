@@ -13,6 +13,7 @@ eng = inflect.engine()
 convergence_orders = lambda x: np.log2(np.array(x)[:-1] / np.array(x)[1:])
 
 parser = get_default_parser()
+#parser.add_argument("--baseN", type=int, default=40)
 parser.add_argument("--dim", type=int, required=True,
                     choices=[2, 3])
 parser.add_argument("--fields", type=str, default="Tup",
@@ -22,10 +23,11 @@ parser.add_argument("--temp-dependent", type=str, default="viscosity-conductivit
 args, _ = parser.parse_known_args()
 
 Ra_s = [1,1000,10000]#,20000]
+Ra_s = [1]#,1000,5000, 7500]#, 8500, 10000]#,20000]
 Ra = Constant(Ra_s[0])
 Pr_s = [1.]
 Pr = Constant(Pr_s[0])
-Di_s = [0., 0.3]
+Di_s = [0.]#, 0.3]
 Di = Constant(Di_s[0])
 r_s = [2.0, 2.7]#, 3.5]
 r_s = [2.0, 2.3, 2.7]#, 3.5]
@@ -50,7 +52,7 @@ problem_cl = {
     }
 }[args.dim][args.fields]
 
-problem_ = problem_cl(temp_dependent=args.temp_dependent, Pr=Pr, Ra=Ra, r=r, Di=Di)
+problem_ = problem_cl(temp_dependent=args.temp_dependent, baseN=args.baseN, Pr=Pr, Ra=Ra, r=r, Di=Di)
 
 results = {}
 for Ra in [Ra_s[-1]]:
@@ -62,11 +64,11 @@ hs = []
 for nref in range(1, args.nref+1):
     args.nref = nref
     solver_ = get_solver(args, problem_)
-    solver_.gamma.assign(0.)
-    problem_.interpolate_initial_guess(solver_.z)
-    solver_.no_convection = True
-    results0 = run_solver(solver_,args, {"r": [2.0]})
-    solver_.no_convection = False
+#    solver_.gamma.assign(0.)
+#    problem_.interpolate_initial_guess(solver_.z)
+#    solver_.no_convection = True
+#    results0 = run_solver(solver_,args, {"r": [2.0]})
+#    solver_.no_convection = False
     mesh = solver_.mesh
     h = Function(FunctionSpace(mesh, "DG", 0)).interpolate(CellSize(mesh))
     with h.dat.vec_ro as w:
@@ -91,8 +93,10 @@ for nref in range(1, args.nref+1):
             theta, SS, u, p = z.split()
             S = solver_.stress_to_matrix(SS)
         elif args.fields == "LTup":
-            _, theta, u, p = z.split()
-            S = problem_.const_rel(sym(grad(u)), theta) #TODO: Should we add L?
+            L_, theta, u, p = z.split()
+            (L_1, L_2, L_3) = split(L_)
+            L = as_tensor(((L_1,L_2),(L_2,L_3)))
+            S = problem_.const_rel(sym(grad(u))+L, theta)
         elif args.fields == "LTSup":
             _, theta, SS, u, p = z.split()
             S = solver_.stress_to_matrix(SS)
@@ -102,6 +106,8 @@ for nref in range(1, args.nref+1):
         veldiv = norm(div(u))
         pressureintegral = assemble(p_ * dx)
         pintegral = assemble(p*dx)
+        #?????????????????????????????
+#        print("norm(L)= ",norm(L))
 
         r_exp = float(solver_.r)
         r_exp_conj = r_exp/(r_exp - 1.)
@@ -141,6 +147,15 @@ for nref in range(1, args.nref+1):
             print("|div(u_h)| = ", veldiv)
             print("p_exact * dx = ", pressureintegral)
             print("p_approx * dx = ", pintegral)
+
+## FOr tests...
+theta_exact = Function(FunctionSpace(z.ufl_domain(), "CG", 1)).interpolate(theta_)
+#u_exact = Function(FunctionSpace(z.ufl_domain(), FiniteElement("BDM",z.ufl_domain(),1,variant="integral"))).interpolate(u_)
+u_exact = Function(u.function_space()).interpolate(u_)
+p_exact = Function(FunctionSpace(z.ufl_domain(), "DG", 0)).interpolate(p_)
+File("exact_mms.pvd").write(theta_exact, u_exact, p_exact)
+File("computed_mms.pvd").write(theta, u, p)
+#??????????????????????
 
 if comm.rank == 0:
     for Ra in [Ra_s[-1]]:
