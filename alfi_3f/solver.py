@@ -34,7 +34,7 @@ class NonNewtonianSolver(object):
                  patch="macro", hierarchy="bary", use_mkl=False, stabilisation_weight_u=None, stabilisation_weight_t=None,
                  patch_composition="additive", restriction=False, smoothing=None, cycles=None,
                  rebalance_vertices=False, hierarchy_callback=None, high_accuracy=False, thermal_conv="none",
-                 linearisation = "newton", low_accuracy = False, no_convection = False, exactly_div_free = True):
+                 linearisation = "newton", low_accuracy = False, no_convection = False, traceless_stress = True):
 
         assert solver_type in {"almg", "allu", "lu", "aljacobi", "alamg", "simple"}, "Invalid solver type %s" % solver_type
         if stabilisation_type_u == "none":
@@ -66,7 +66,7 @@ class NonNewtonianSolver(object):
         self.high_accuracy = high_accuracy
         self.low_accuracy = low_accuracy
         self.no_convection = no_convection
-        self.exactly_div_free = exactly_div_free
+        self.traceless_stress = traceless_stress
         self.thermal_conv = thermal_conv
         self.formulation = self.problem.formulation
         self.linearisation = linearisation
@@ -589,14 +589,14 @@ class NonNewtonianSolver(object):
 
     def stress_to_matrix(self, S_):
         if self.tdim == 2:
-            if self.exactly_div_free:
+            if self.traceless_stress:
                 (S_1,S_2) = split(S_)
                 S = as_tensor(((S_1,S_2),(S_2,-S_1)))
             else:
                 (S_1,S_2,S_3) = split(S_)
                 S = as_tensor(((S_1,S_2),(S_2,S_3)))
         else:
-            if self.exactly_div_free:
+            if self.traceless_stress:
                 (S_1,S_2,S_3,S_4,S_5) = split(S_)
                 S = as_tensor(((S_1,S_2,S_3),(S_2,S_5,S_4),(S_3,S_4,-S_1-S_5)))
             else:
