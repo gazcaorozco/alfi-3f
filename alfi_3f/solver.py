@@ -209,6 +209,7 @@ class NonNewtonianSolver(object):
         theta_ = fields.get("theta_")
 
         bcs = problem.bcs(Z)
+        self.bcs = bcs
         nsp = problem.nullspace(Z)
 
         if nsp is not None and solver_type == "lu":
@@ -328,7 +329,6 @@ class NonNewtonianSolver(object):
         if not("nu" in list(self.problem.const_rel_params.keys())):
             appctx["nu"] = self.nu
         problem = NonlinearVariationalProblem(F, z, bcs=bcs, J=self.J)
-        self.bcs = bcs
         self.params = params
         self.nsp = nsp
         self.appctx = appctx
@@ -948,6 +948,8 @@ class NonNewtonianSolver(object):
             "ksp_type": "fgmres",
             "ksp_monitor_true_residual": None,
             "ksp_converged_reason": None,
+            "snes_divtol": "1e14",
+#            "ksp_view": None,
 #            "snes_view": None,
         }
 

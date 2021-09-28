@@ -4,11 +4,11 @@ from alfi_3f import *
 
 from firedrake.petsc import PETSc
 
-#PETSc.Sys.popErrorHandler()
+PETSc.Sys.popErrorHandler()
 
 class OldroydB_Poiseuille(NonNewtonianProblem_Sup):
-    def __init__(self, baseN, nu, tau, G, diagonal=None):
-        super().__init__(nu=nu, tau=tau, G=G)
+    def __init__(self, baseN, nu, tau, G, delta=0.0, diagonal=None):
+        super().__init__(nu=nu, tau=tau, G=G, delta=delta)
         if diagonal is None:
             diagonal = "left"
         self.diagonal = diagonal
@@ -20,7 +20,8 @@ class OldroydB_Poiseuille(NonNewtonianProblem_Sup):
 
     def bcs(self, Z):#TODO: Try with natural BCs?
         bcs = [DirichletBC(Z.sub(1), self.exact_vel(Z.ufl_domain()), "on_boundary"),
-               DirichletBC(Z.sub(0), self.exact_stress(Z.ufl_domain()), [1])] #inflow
+               DirichletBC(Z.sub(0), self.exact_stress(Z.ufl_domain()), 1)] #inflow
+#        for bc in bcs: print(bc._function_space)
         return bcs
 
     def has_nullspace(self): return True
@@ -40,9 +41,20 @@ class OldroydB_Poiseuille(NonNewtonianProblem_Sup):
 
     def exact_pressure(self, domain):
         (x, y) = SpatialCoordinate(domain)
-        p_ex = 4 - y
+        p_ex = 4 - x
         p_ex = p_ex - 0.25*assemble(p_ex*dx) #Assumes we are using only Dirichlet BCs
         return p_ex
+
+#    def rhs(self, Z):
+#        u_ex = self.exact_velocity(Z)
+#        p_ex = self.exact_pressure(Z)
+#
+#        S_ex = self.exact_stress(Z)
+#
+#        f1 = -div(S_ex) + div(outer(u_ex, u_ex)) + grad(p_ex)
+#        f2 = -div(u_ex)
+#
+#        return f1, f2
 
 if __name__ == "__main__":
     parser = get_default_parser()
@@ -56,16 +68,18 @@ if __name__ == "__main__":
     nu = Constant(1.0)
     tau = Constant(1.0)
     G = Constant(1.0)
+    delta = Constant(0.1)
 
-    problem_Sup = OldroydB_Poiseuille(args.baseN, nu=nu, tau=tau, G=G, diagonal=args.diagonal)
+    problem_Sup = OldroydB_Poiseuille(args.baseN, nu=nu, tau=tau, G=G, delta=delta, diagonal=args.diagonal)
     solver_Sup = get_solver(args, problem_Sup)
 
     #Test a simple problem
     nu_s = [1.0]
-    taus = [1.0]
-    G_s = [1.0]
+    taus = [0.5, 1.0]
+    G_s = [0.0, 1.0]
+    deltas = [0.1]
 
-    continuation_params = {"G": G_s, "tau": taus, "nu": nu_s}
+    continuation_params = {"delta": deltas ,"G": G_s, "tau": taus, "nu": nu_s}
     results = run_solver(solver_Sup, args, continuation_params)
 
     ## Errors
