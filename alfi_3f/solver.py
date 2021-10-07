@@ -619,7 +619,7 @@ class NonNewtonianSolver(object):
         elif self.formulation_LTup:
             (L_,theta,u, p) = split(z)
             (LT_,theta_,v, q) = split(TestFunction(Z))
-        if self.formulation_Sup or self.formulation_LSup or self.formulation_LTup or self.formulation_LTSup:
+        if self.formulation_Sup or self.formulation_Lup or self.formulation_LSup or self.formulation_LTup or self.formulation_LTSup:
             L = self.stress_to_matrix(L_, False)
             LT = self.stress_to_matrix(LT_, False)
             fields["L"] = L
@@ -1507,6 +1507,7 @@ class HDivSolver(NonNewtonianSolver):
         theta = fields.get("theta")
         theta_ = fields.get("theta_")
         D = sym(grad(u))
+
 
         #For the constitutive relation
         if self.formulation_Sup or self.formulation_TSup:
