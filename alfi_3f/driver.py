@@ -18,7 +18,8 @@ def get_default_parser():
     parser.add_argument("--nref", type=int, default=1)
     parser.add_argument("--baseN", type=int, default=16)
     parser.add_argument("--k", type=int, default=2)
-    parser.add_argument("--stabilisation-weight", type=float, default=None)
+    parser.add_argument("--stabilisation-weight-u", type=float, default=None)
+    parser.add_argument("--stabilisation-weight-t", type=float, default=None)
     parser.add_argument("--solver-type", type=str, default="almg",
                         choices=["lu", "allu", "almg", "aljacobi", "alamg", "simple", "lu-hdiv", "allu-hdiv", "almg-hdiv"])#,  "lu-p1"])
     parser.add_argument("--patch", type=str, default="macro",
@@ -27,16 +28,18 @@ def get_default_parser():
                         choices=["additive", "multiplicative"])
     parser.add_argument("--mh", type=str, default="bary",
                         choices=["uniform", "bary", "uniformbary"])
-    parser.add_argument("--stabilisation-type", type=str, default=None,
-                        choices=["none", "burman", "gls", "supg"]) #"supg-temp"
     parser.add_argument("--fluxes", type=str, default=None,
                         choices=["none", "ldg", "ip", "mixed"])
+    parser.add_argument("--stabilisation-type-u", type=str, default=None,
+                        choices=["none", "burman", "gls", "supg"])
+    parser.add_argument("--stabilisation-type-t", type=str, default=None,
+                        choices=["none", "supg", "burman"])
     parser.add_argument("--linearisation", type=str, default="newton",
-                        choices=["newton", "picard", "kacanov"]) #kacanov=full Picard #TODO: "regularised"
+                        choices=["newton", "picard", "kacanov"]) #kacanov=full Picard
     parser.add_argument("--thermal-conv", type=str, default="none",
                         choices=["none", "natural_Ra", "natural_Ra2", "natural_Gr", "forced"])
     parser.add_argument("--discretisation", type=str, required=True,
-                        choices=["sv","th","p1p1","p1p0","bdm1p0","rt1p0"])
+                        choices=["sv","th","p1p1","p1p0","bdm","rt"])
     parser.add_argument("--gamma", type=float, default=1e4)
     parser.add_argument("--clear", dest="clear", default=False,
                         action="store_true")
@@ -63,49 +66,6 @@ def get_default_parser():
     parser.add_argument("--smoothing", type=int, default=None)
     parser.add_argument("--cycles", type=int, default=None)
     return parser
-
-def visualisation(solver, file_, time):  #FIXME: What should we do here?
-    raise NotImplementedError
-#    if solver.formulation_Sup:
-#        (S_,u,p) = solver.z.split()
-#        k = solver.z.sub(1).ufl_element().degree()
-#    elif solver.formulation_up:
-#        (u,p) = solver.z.split()
-#        k = solver.z.sub(0).ufl_element().degree()
-#        S = solver.problem.const_rel(sym(grad(u)))
-#    elif solver.formulation_TSup:
-#        (theta,S_,u,p) = solver.z.split()
-#        k = solver.z.sub(2).ufl_element().degree()
-#    elif solver.formulation_Tup:
-#        (theta,u,p) = solver.z.split()
-#        k = solver.z.sub(1).ufl_element().degree()
-#        S = solver.problem.const_rel(sym(grad(u)))
-#
-#    if solver.formulation_Sup or solver.formulation_LSup or solver.formulation_TSup:
-#        if solver.tdim == 2:
-#            (S_1,S_2) = split(S_)
-#            S = as_tensor(((S_1,S_2),(S_2,-S_1)))
-#        else:
-#            (S_1,S_2,S_3,S_4,S_5) = split(S_)
-#            S = as_tensor(((S_1,S_2,S_3),(S_2,S_5,S_4),(S_3,S_4,-S_1-S_5)))
-#    if solver.formulation_LSup:
-#        if solver.tdim == 2:
-#            (D_1,D_2) = split(D_)
-#            D = as_tensor(((D_1,D_2),(D_2,-D_1)))
-#        else:
-#            (D_1,D_2,D_3,D_4,D_5) = split(D_)
-#            D = as_tensor(((D_1,D_2,D_3),(D_2,D_5,D_4),(D_3,D_4,-D_1-D_5)))
-#    else:
-#        D = sym(grad(u))
-#
-#    SS = project(S,TensorFunctionSpace(solver.z.ufl_domain(),"DG",k-1))
-#    DD = project(D,TensorFunctionSpace(solver.z.ufl_domain(),"DG",k-1))
-#    u.rename("Velocity")
-#    p.rename("Pressure")
-#    SS.rename("Stress")
-#    file_.write(solver.visprolong(u),solver.visprolong(theta),time=time)  #Try just velocity for now
-#    file_.write(solver.visprolong(u),solver.visprolong(p),solver.visprolong(SS),solver.visprolong(DD),time=time)
-
 
 #def const_relation_output(solver,directory):#FIXME: This is going to take more work... is it worth it?
 #    file_= directory+"const_rel-"
@@ -160,21 +120,23 @@ def get_solver(args, problem, hierarchy_callback=None):
                 "th": TaylorHoodSolver,
                 "p1p1": P1P1Solver,
                 "p1p0": P1P0Solver,
-                "bdm1p0": BDMSolver,
-                "rt1p0": RTSolver}[args.discretisation]
+                "bdm": BDMSolver,
+                "rt": RTSolver}[args.discretisation]
 
     solver = solver_t(
         problem,
         solver_type=args.solver_type,
-        stabilisation_type=args.stabilisation_type,
+        stabilisation_type_u=args.stabilisation_type_u,
+        stabilisation_type_t=args.stabilisation_type_t,
         linearisation=args.linearisation,
         nref=args.nref,
         k=args.k,
         gamma=args.gamma,
         patch=args.patch,
         use_mkl=args.mkl,
-        supg_method="shakib",
-        stabilisation_weight=args.stabilisation_weight,
+        supg_method_u="shakib",
+        supg_method_t="shakib",
+        stabilisation_weight_u=args.stabilisation_weight_u,
         hierarchy=args.mh,
         patch_composition=args.patch_composition,
         thermal_conv=args.thermal_conv,
@@ -186,7 +148,7 @@ def get_solver(args, problem, hierarchy_callback=None):
         low_accuracy=args.low_accuracy,
         hierarchy_callback=hierarchy_callback,
         no_convection=args.no_convection,
-        exactly_div_free = True if args.discretisation in ["sv", "bdm1p0", "rt1p0"] else False,
+        exactly_div_free = True if args.discretisation in ["sv", "bdm", "rt"] else False,
         fluxes = args.fluxes
     )
     return solver

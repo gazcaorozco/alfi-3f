@@ -1,10 +1,13 @@
 #Temperature dependent viscosity and conductivity
-#mpiexec -n 4 python ob_cavity2d.py --discretisation sv --mh bary --patch macro --restriction --baseN 10 --gamma 10000 --temp-bcs left-right --stabilisation-weight 5e-3 --solver-type almg --thermal-conv natural_Gr --fields Tup --temp-dependent viscosity-conductivity --stabilisation-type burman --k 2 --nref 2 --cycles 2 --smoothing 4
+#mpiexec -n 4 python ob_cavity2d.py --discretisation sv --mh bary --patch macro --restriction --baseN 10 --gamma 10000 --temp-bcs left-right --stabilisation-weight-u 5e-3 --solver-type almg --thermal-conv natural_Gr --fields Tup --temp-dependent viscosity-conductivity --stabilisation-type-u burman --k 2 --nref 2 --cycles 2 --smoothing 4
 from firedrake import *
 from alfi_3f import *
 
+from firedrake.petsc import PETSc
+PETSc.Sys.popErrorHandler()
+
 class TempViscosityOBCavity_up(NonIsothermalProblem_up):
-    def __init__(self, baseN, temp_bcs="left-right", temp_dependent="viscosity", diagonal=None, **params):
+    def __init__(self, baseN, temp_bcs="left-right", temp_dependent="viscosity", diagonal=None, unstructured=False, **params):
         super().__init__(**params)
         if diagonal is None:
             diagonal = "left"
@@ -12,9 +15,13 @@ class TempViscosityOBCavity_up(NonIsothermalProblem_up):
         self.baseN = baseN
         self.temp_bcs = temp_bcs
         self.temp_dependent = temp_dependent
+        self.unstructured = unstructured
 
     def mesh(self, distribution_parameters):
-        base = RectangleMesh(self.baseN, self.baseN, 1, 1, distribution_parameters=distribution_parameters, diagonal = self.diagonal)
+        if self.unstructured:
+            base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/square.msh",distribution_parameters=distribution_parameters)
+        else:
+            base = RectangleMesh(self.baseN, self.baseN, 1, 1, distribution_parameters=distribution_parameters, diagonal = self.diagonal)
         return base
 
     def bcs(self, Z):
@@ -38,7 +45,7 @@ class TempViscosityOBCavity_up(NonIsothermalProblem_up):
         S = K*pow(inner(D,D),nr)*D
         return S
 
-    def const_rel_picard(self,D,D0,theta):
+    def const_rel_picard(self,D, theta, D0):
         nr = (self.r - 2.)/2.
         K = self.viscosity(theta)
         S0 = K*pow(inner(D,D),nr)*D0
@@ -70,7 +77,7 @@ class TempViscosityOBCavity_up(NonIsothermalProblem_up):
         z.sub(1).interpolate(w_expr)
 
 class TempViscosityOBCavity_Sup(NonIsothermalProblem_Sup):
-    def __init__(self, baseN, temp_bcs="left-right", temp_dependent="viscosity", diagonal=None, **params):
+    def __init__(self, baseN, temp_bcs="left-right", temp_dependent="viscosity", diagonal=None, unstructured=False, **params):
         super().__init__(**params)
         if diagonal is None:
             diagonal = "left"
@@ -78,9 +85,13 @@ class TempViscosityOBCavity_Sup(NonIsothermalProblem_Sup):
         self.baseN = baseN
         self.temp_bcs = temp_bcs
         self.temp_dependent = temp_dependent
+        self.unstructured = unstructured
 
     def mesh(self, distribution_parameters):
-        base = RectangleMesh(self.baseN, self.baseN, 1, 1, distribution_parameters=distribution_parameters, diagonal = self.diagonal)
+        if self.unstructured:
+            base = Mesh(os.path.dirname(os.path.abspath(__file__)) + "/square.msh",distribution_parameters=distribution_parameters)
+        else:
+            base = RectangleMesh(self.baseN, self.baseN, 1, 1, distribution_parameters=distribution_parameters, diagonal = self.diagonal)
         return base
 
     def bcs(self, Z):
@@ -106,7 +117,7 @@ class TempViscosityOBCavity_Sup(NonIsothermalProblem_Sup):
 #        G = D - (1./(2.*self.nu))*pow(inner(S/(2.*self.nu),S/(2.*self.nu)),nr2)*S
         return G
 
-    def const_rel_picard(self,S,D,S0,D0,theta):
+    def const_rel_picard(self,S, D, theta, S0, D0):
         nr = (self.r - 2.)/2.
 #        nr2 = (2. - self.r)/(2.*(self.r - 1.))
         K = self.viscosity(theta)
@@ -150,11 +161,13 @@ if __name__ == "__main__":
                         choices=["left-right","down-up"])
     parser.add_argument("--temp-dependent", type=str, default="none",
                         choices=["none","viscosity","viscosity-conductivity"])
+    parser.add_argument("--unstructured", dest="unstructured", default=False,
+                        action="store_true")
     parser.add_argument("--plots", dest="plots", default=False,
                         action="store_true")
     args, _ = parser.parse_known_args()
 
-    assert args.thermal_conv in ["natural_Ra1", "natural_Ra2", "natural_Gr"], "You need to select natural convection"
+    assert args.thermal_conv in ["natural_Ra", "natural_Ra2", "natural_Gr"], "You need to select natural convection"
 
     #Prandtl number
     Pr_s = [1.,10.]
@@ -172,7 +185,8 @@ if __name__ == "__main__":
     else:
         #Grashof number
         Gr_s = [2500] + list(range(20000, 100000000 + 20000, 20000)) #To test how high can it get (very inefficient)
-        Gr_s = [2500] + list(range(500000, 12500000 + 500000, 500000))# + list(range(12500000 + 500000, 15000000 + 500000, 500000)) #For Navier-Stokes
+        Gr_s = [2500] + list(range(500000, 12500000 + 500000, 500000)) + list(range(12500000 + 500000, 15000000 + 500000, 500000)) + list(range(15000000 + 50000, 1e8, 50000)) #To test how high can it get
+#        Gr_s = [2500] + list(range(500000, 12500000 + 500000, 500000)) + list(range(12500000 + 500000, 15000000 + 500000, 500000)) #For Navier-Stokes
         Gr = Constant(Gr_s[0])
 
     #Power-law
@@ -190,14 +204,14 @@ if __name__ == "__main__":
 
     if args.thermal_conv in ["natural_Ra", "natural_Ra2"]:
         if args.fields == "Tup":
-            problem_ = TempViscosityOBCavity_up(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, diagonal=args.diagonal, Pr=Pr, Ra=Ra, r=r, Di=Di)
+            problem_ = TempViscosityOBCavity_up(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, diagonal=args.diagonal, unstructured=args.unstructured, Pr=Pr, Ra=Ra, r=r, Di=Di)
         else:
-            problem_ = TempViscosityOBCavity_Sup(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, diagonal=args.diagonal, Pr=Pr, Ra=Ra, r=r, Di=Di)
+            problem_ = TempViscosityOBCavity_Sup(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, diagonal=args.diagonal, unstructured=args.unstructured, Pr=Pr, Ra=Ra, r=r, Di=Di)
     else:
         if args.fields == "Tup":
-            problem_ = TempViscosityOBCavity_up(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, diagonal=args.diagonal, Pr=Pr, Gr=Gr, r=r, Di=Di)
+            problem_ = TempViscosityOBCavity_up(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, diagonal=args.diagonal, unstructured=args.unstructured, Pr=Pr, Gr=Gr, r=r, Di=Di)
         else:
-            problem_ = TempViscosityOBCavity_Sup(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, diagonal=args.diagonal, Pr=Pr, Gr=Gr, r=r, Di=Di)
+            problem_ = TempViscosityOBCavity_Sup(args.baseN, temp_bcs=args.temp_bcs, temp_dependent=args.temp_dependent, diagonal=args.diagonal, unstructured=args.unstructured, Pr=Pr, Gr=Gr, r=r, Di=Di)
 
     solver_ = get_solver(args, problem_)
     problem_.interpolate_initial_guess(solver_.z)
@@ -251,4 +265,4 @@ if __name__ == "__main__":
         string += "_%s"%(args.stabilisation_type)
         string += "_%s"%(args.solver_type)
 
-        File("plots_new/z%s.pvd"%string).write(DD,SS,u,theta)
+        File("plots/z%s.pvd"%string).write(DD,SS,u,theta)

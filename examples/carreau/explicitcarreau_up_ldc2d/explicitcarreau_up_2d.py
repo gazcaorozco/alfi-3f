@@ -1,4 +1,4 @@
-#--k 2 --nref 1 --baseN 12 --solver-type almg --discretisation sv --mh bary --stabilisation-type burman --patch macro --smoothing 4 --cycles 2 --restriction --stabilisation-weight 5e-3
+#--k 2 --nref 1 --baseN 12 --solver-type almg --discretisation sv --mh bary --stabilisation-type-u burman --patch macro --smoothing 4 --cycles 2 --restriction --stabilisation-weight-u 5e-3
 from firedrake import *
 from alfi_3f import *
 
@@ -33,6 +33,12 @@ class Carreau_ldc2d(NonNewtonianProblem_up):
         visc_diff2 = (2.*self.nu)*(1. - self.tau)
         S = visc_diff2*pow(1 + (1./self.eps)*inner(D,D),nn2)*D + 2.*self.nu*self.tau*D
         return S
+
+    def const_rel_picard(self, D, D0):
+        nn2 = (self.r-2)/(2.)
+        visc_diff2 = (2.*self.nu)*(1. - self.tau)
+        S0 = visc_diff2*pow(1 + (1./self.eps)*inner(D,D),nn2)*D0 + 2.*self.nu*self.tau*D0
+        return S0
 
     def driver(self, domain):
         (x, y) = SpatialCoordinate(domain)
@@ -118,10 +124,10 @@ if __name__ == "__main__":
 #    problem_up.interpolate_initial_guess(solver_up.z)
 
     #Test a simple problem
-#    r_s = [2.]
-#    epss = [1.]
-#    nus = [2.]
-#    taus = [1.]
+    r_s = [2.]
+    epss = [1.]
+    nus = [2.]
+    taus = [1.]
 
     #Continuation for small nu (needs advective stabilisation)
     r_s = [2., 1.8, 1.6]
