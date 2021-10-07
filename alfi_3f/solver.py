@@ -1594,7 +1594,7 @@ class HDivSolver(NonNewtonianSolver):
     def residual(self):
 
         #Define functions and test functions
-        fields = self.split_variables()
+        fields = self.split_variables(self.z)
         u = fields["u"]
         v = fields["v"]
         p = fields["p"]
@@ -2187,27 +2187,3 @@ class BDMSolver(HDivSolver):
         elif self.formulation_LTSup:
             Z = FunctionSpace(mesh, MixedElement([eleL,eleth,eles,eleu,elep]))
         return Z
-=======
-    def get_jacobian(self):
-
-        J0 = super().get_jacobian()
-        if self.linearisation == "newton":
-            return J0  #Already contains the pressure stabilisation
-        else:
-
-            #Split variables
-            fields = self.split_variables(self.z)
-            q = fields["q"]
-            #Split trial function
-            w = TrialFunction(self.Z)
-            fields0 = self.split_variables(w)
-            p0 = fields0["p"]
-
-            #Stabilisation
-            h = CellDiameter(self.mesh)
-            beta = Constant(0.1)
-            delta = h * beta
-            J0 -=  inner(avg(delta) * jump(p0),jump(q))*dS
-
-            return J0
->>>>>>> main

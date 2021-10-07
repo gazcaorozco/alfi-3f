@@ -116,7 +116,7 @@ if __name__ == "__main__":
     if args.newtonian:
         pclass = Carreau_ldc2d
     else:
-        pclass = Carreau_ldc2d_Hdiv if args.discretisation in ["bdm1p0", "rt1p0"] else Carreau_ldc2d
+        pclass = Carreau_ldc2d_Hdiv if args.discretisation in ["bdm", "rt"] else Carreau_ldc2d
 
     problem_up = pclass(args.baseN,r=r,nu=nu,eps=eps,tau=tau,diagonal=args.diagonal)
     solver_up = get_solver(args, problem_up)
