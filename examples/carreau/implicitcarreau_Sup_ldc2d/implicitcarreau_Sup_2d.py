@@ -150,7 +150,7 @@ if __name__ == "__main__":
     if args.explicit:
         pclass = ImplicitCarreau_ldc
     else:
-        pclass = ImplicitCarreau_ldc_Hdiv if args.discretisation in ["bdm1p0", "rt1p0"] else ImplicitCarreau_ldc
+        pclass = ImplicitCarreau_ldc_Hdiv if args.discretisation in ["bdm", "rt"] else ImplicitCarreau_ldc
 
     problem_Sup = pclass(args.baseN,r=r,nu=nu,eps=eps,tau=tau,r2=r2,nu2=nu2,eps2=eps2,tau2=tau2,diagonal=args.diagonal,explicit=args.explicit)
     solver_Sup = get_solver(args, problem_Sup)
