@@ -21,6 +21,7 @@ parser.add_argument("--fields", type=str, default="Tup",
 parser.add_argument("--temp-dependent", type=str, default="viscosity-conductivity",
                         choices=["none","viscosity","viscosity-conductivity"])
 args, _ = parser.parse_known_args()
+assert args.thermal_conv == "natural_Ra", "this example is meant to work with natural convection: --thermal-conv natural_Ra"
 
 Ra_s = [1,1000,10000]#,20000]
 Ra_s = [1]#,1000,5000, 7500]#, 8500, 10000]#,20000]
@@ -33,7 +34,7 @@ r_s = [2.0, 2.7]#, 3.5]
 r_s = [2.0, 2.3, 2.7]#, 3.5]
 r_s = [2.0]
 #r_s = [2.0, 1.8, 1.6]
-if args.discretisation in ["bdm1p0", "rt1p0"] and args.fields == "Tup": r_s = [2.0]
+if args.discretisation in ["bdm", "rt"] and args.fields == "Tup": r_s = [2.0]
 r = Constant(r_s[0])
 continuation_params = {"r": r_s,"Pr": Pr_s,"Di": Di_s,"Ra": Ra_s}
 

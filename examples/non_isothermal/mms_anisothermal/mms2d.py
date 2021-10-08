@@ -88,10 +88,11 @@ class OBCavityMMS(NonNewtonianProblem):
         D = sym(grad(u))
         S = self.exact_stress(Z)
         q = self.const_rel_temperature(theta, grad(theta))
-        #f1 = -div(q) + div(u*theta) + self.Di*(theta + self.Theta)*dot(g, u) - (self.Di/self.Ra)*inner(S,D)
-        f1 = -div(grad(theta)) #+ div(u*theta)
+        f1 = -div(q) + div(u*theta) + self.Di*(theta + self.Theta)*dot(g, u) - (self.Di/self.Ra)*inner(S,D)
+        #f1 = -div(grad(theta)) + div(u*theta)
 #        f1 = -div(grad(theta)) + div(u*theta) + self.Di*(theta + self.Theta)*dot(g, u) - (self.Di/self.Ra)*inner(D,D)
-        f2 = -div(D) + grad(p) #- theta*g
+        #f2 = -div(D) + grad(p) + div(outer(u,u)) - theta*g
+        f2 = -self.Pr*div(S) + div(outer(u, u)) + grad(p) - (self.Ra*self.Pr)*theta*g
         #f2 = -self.Pr*div(D) + div(outer(u, u)) + grad(p) - (self.Ra*self.Pr)*theta*g
         f3 = -div(u)
         return (f1, f2, f3)
@@ -130,6 +131,10 @@ class OBCavityMMS_LTup(OBCavityMMS):
         S = K*pow(inner(D,D),nr)*D
         return S
 
+    def rhs(self, Z):
+        rhs_ = super().rhs(Z)
+        return (None, rhs_[0], rhs_[1], rhs_[2])
+
 class OBCavityMMS_TSup(OBCavityMMS):
     def __init__(self, temp_dependent="viscosity-conductivity", baseN=40, **params):
         super().__init__(temp_dependent=temp_dependent, **params)
@@ -149,6 +154,10 @@ class OBCavityMMS_TSup(OBCavityMMS):
         #G = D - (1./K) * pow(inner(D,D) / K,nr)*S
         return G
 
+    def rhs(self, Z):
+        rhs_ = super().rhs(Z)
+        return (rhs_[0], None, rhs_[1], rhs_[2])
+
 class OBCavityMMS_LTSup(OBCavityMMS):
     def __init__(self, temp_dependent="viscosity-conductivity", baseN=40, **params):
         super().__init__(temp_dependent=temp_dependent, **params)
@@ -167,3 +176,7 @@ class OBCavityMMS_LTSup(OBCavityMMS):
         G = S - K*pow(inner(D,D),nr)*D
 #        G = D - (1./K) * pow(inner(D,D) / K,nr)*S
         return G
+
+    def rhs(self, Z):
+        rhs_ = super().rhs(Z)
+        return (None, rhs_[0], None, rhs_[1], rhs_[2])
