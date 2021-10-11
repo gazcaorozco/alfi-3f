@@ -1657,7 +1657,6 @@ class HDivSolver(NonNewtonianSolver):
                 if self.formulation_Tup:
                     F += (
                         self.Pr * inner(G, sym(grad(v)))*dx
-                        #- self.Pr * self.nu * inner(avg(2*sym(grad(u))), 2*avg(outer(v, n))) * dS
                         - self.Pr * inner(avg(G), 2*avg(outer(v, n))) * dS
                         - self.Pr * self.nu * inner(avg(2*sym(grad(v))), 2*avg(outer(u, n))) * dS
                         + 2. * self.Pr * self.nu * sigma/avg(h) * inner(2*avg(outer(u,n)), 2*avg(outer(v,n))) * dS
@@ -1665,45 +1664,11 @@ class HDivSolver(NonNewtonianSolver):
 #                        + (self.Di/self.Ra) * 4. * self.nu * inner(2*avg(outer(u,n)), avg(D*theta_)) * dS #(L,L) is missing
                         )
                 elif self.formulation_LTup:
-##<<<<<<< HEAD#FIXME: Remove this when you're done
-###                    jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form)
-###                    F += (
-###                        self.Pr * inner(G,sym(grad(v)))*dx
-###                        + inner(L, LT) * dx
-###                        + inner(2*avg(outer(u,n)), avg(LT)) * dS
-###                        + self.Pr * sigma * inner(jmp_penalty, 2*avg(outer(v,n))) * dS
-###                        - self.Pr * inner(avg(G), 2*avg(outer(v, n))) * dS
-###                        - (self.Di/self.Ra) * inner(G, D+L) * theta_ * dx
-###                        )
-###                    if self.fluxes == "ip":
-###                        S_rh = self.problem.const_rel(-L)
-###                        F -= self.Pr * inner(avg(S_rh), 2*avg(outer(v,n))) * dS
-#                    G = D + L
-#                    F = (
-#                        inner(L, LT) * dx
-#=======
                     F += (
-                        self.Pr * inner(G,sym(grad(v)))*dx
-                        + inner(L, LT) * dx
-### >>>>>>> hdiv 
+                        inner(L, LT) * dx
                         + inner(2*avg(outer(u,n)), avg(LT)) * dS
-                        + inner(G, sym(grad(v))) * dx
-                        + self.gamma * inner(div(u), div(v))*dx
-                        - self.advect * inner(outer(u,u), grad(v)) * dx
-                        + self.advect * dot(v('+')-v('-'), uflux_int_('+')-uflux_int_('-'))*dS
-                        - p * div(v) * dx
-                        - self.Ra * self.Pr * inner(theta * g, v) * dx
-                        - div(u) * q * dx
-                        + inner(th_flux, grad(theta_)) * dx
-                        - inner(theta*u, grad(theta_)) * dx
-                        + self.Di* (theta + self.Theta) * dot(g, u) * theta_ * dx
+                        + self.Pr * inner(G,sym(grad(v)))*dx
                         - (self.Di/self.Ra) * inner(G,D+L) * theta_ * dx
-                    )
-                    #For the jump terms
-                    U_jmp = 2. * avg(outer(u,n))
-                    sigma = Constant(5.0)
-                    jmp_penalty = (1./avg(h)) * U_jmp
-                    F += (
                         - inner(avg(G), 2*avg(outer(v, n))) * dS
                         + sigma * inner(jmp_penalty, 2*avg(outer(v,n))) * dS
                         )
@@ -1847,28 +1812,28 @@ class HDivSolver(NonNewtonianSolver):
 #        inner(L, LT) * dx
 ##        - inner(Identity(2), LT) * dx
 #        + inner(2*avg(outer(u,n)), avg(LT)) * dS
-#        + inner(G, sym(grad(v))) * dx
+#        + self.Pr * inner(G, sym(grad(v))) * dx
 #        + self.gamma * inner(div(u), div(v))*dx
 #        - self.advect * inner(outer(u,u), grad(v)) * dx
 #        + self.advect * dot(v('+')-v('-'), uflux_int_('+')-uflux_int_('-'))*dS
 #        - p * div(v) * dx
-#        - inner(theta * g, v) * dx
+#        - self.Ra * self.Pr * inner(theta * g, v) * dx
 #        - div(u) * q * dx
-#        + inner(grad(theta), grad(theta_)) * dx
+#        + inner(th_flux, grad(theta_)) * dx
 #        - inner(theta*u, grad(theta_)) * dx
-##        + self.Di* (theta + self.Theta) * dot(g, u) * theta_ * dx
-##        - (self.Di/self.Ra) * inner(D+L,D+L) * theta_ * dx
+#        + self.Di* (theta + self.Theta) * dot(g, u) * theta_ * dx
+#        - (self.Di/self.Ra) * inner(G,D+L) * theta_ * dx
 #        )
-
-        #For the jump terms
-        U_jmp = 2. * avg(outer(u,n))
-        sigma = Constant(5.0)
-        jmp_penalty = (1./avg(h)) * U_jmp
-        F += (
-        - inner(avg(sym(grad(v))), 2*avg(outer(u, n))) * dS
-        - inner(avg(D), 2*avg(outer(v, n))) * dS
-        + sigma * inner(jmp_penalty, 2*avg(outer(v,n))) * dS
-        )
+#
+#        #For the jump terms
+#        U_jmp = 2. * avg(outer(u,n))
+#        sigma = Constant(5.0)
+#        jmp_penalty = (1./avg(h)) * U_jmp
+#        F += (
+#        ##- inner(avg(sym(grad(v))), 2*avg(outer(u, n))) * dS
+#        - inner(avg(G), 2*avg(outer(v, n))) * dS
+#        + sigma * inner(jmp_penalty, 2*avg(outer(v,n))) * dS
+#        )
 #=============================================================================
 
         exterior_markers = list(self.mesh.exterior_facets.unique_markers)
