@@ -150,8 +150,8 @@ class OBCavityMMS_TSup(OBCavityMMS):
         nr = (float(self.r) - 2.)/2.
         nr_x = (2. - float(self.r)) / (2.*(float(self.r) - 1.))
         K = self.viscosity(theta)
-        G = S - K*pow(inner(D,D),nr)*D
-        #G = D - (1./K) * pow(inner(D,D) / K,nr)*S
+        #G = S - K*pow(inner(D,D),nr)*D
+        G = D - (1./K) * pow(inner(D,D) / K,nr)*S
         return G
 
     def rhs(self, Z):
