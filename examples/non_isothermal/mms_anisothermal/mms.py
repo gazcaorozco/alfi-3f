@@ -23,15 +23,16 @@ parser.add_argument("--temp-dependent", type=str, default="viscosity-conductivit
 args, _ = parser.parse_known_args()
 assert args.thermal_conv == "natural_Ra", "this example is meant to work with natural convection: --thermal-conv natural_Ra"
 
-Ra_s = [1,1000,10000]#,20000]
+#Ra_s = [1,1000,10000]#,20000]
 Ra_s = [1]#,1000,5000, 7500]#, 8500, 10000]#,20000]
 Ra = Constant(Ra_s[0])
 Pr_s = [1.]
 Pr = Constant(Pr_s[0])
-Di_s = [0., 0.3]
+#Di_s = [0., 0.3]
+Di_s = [0.]
 Di = Constant(Di_s[0])
-r_s = [2.0, 2.7]#, 3.5]
-r_s = [2.0, 2.3, 2.7]#, 3.5]
+#r_s = [2.0, 2.7]#, 3.5]
+#r_s = [2.0, 2.3, 2.7]#, 3.5]
 r_s = [2.0]
 #r_s = [2.0, 1.8, 1.6]
 if args.discretisation in ["bdm", "rt"] and args.fields == "Tup": r_s = [2.0]
@@ -107,8 +108,6 @@ for nref in range(1, args.nref+1):
         veldiv = norm(div(u))
         pressureintegral = assemble(p_ * dx)
         pintegral = assemble(p*dx)
-        #?????????????????????????????
-#        print("norm(L)= ",norm(L))
 
         r_exp = float(solver_.r)
         r_exp_conj = r_exp/(r_exp - 1.)
@@ -148,15 +147,6 @@ for nref in range(1, args.nref+1):
             print("|div(u_h)| = ", veldiv)
             print("p_exact * dx = ", pressureintegral)
             print("p_approx * dx = ", pintegral)
-
-## FOr tests...
-theta_exact = Function(FunctionSpace(z.ufl_domain(), "CG", 1)).interpolate(theta_)
-#u_exact = Function(FunctionSpace(z.ufl_domain(), FiniteElement("BDM",z.ufl_domain(),1,variant="integral"))).interpolate(u_)
-u_exact = Function(u.function_space()).interpolate(u_)
-p_exact = Function(FunctionSpace(z.ufl_domain(), "DG", 0)).interpolate(p_)
-File("exact_mms.pvd").write(theta_exact, u_exact, p_exact)
-File("computed_mms.pvd").write(theta, u, p)
-#??????????????????????
 
 if comm.rank == 0:
     for Ra in [Ra_s[-1]]:

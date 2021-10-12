@@ -589,10 +589,10 @@ class NonNewtonianSolver(object):
             if self.formulation_Lup:
                 jmp_penalty = self.problem.const_rel(U_jmp)
             elif self.formulation_LTup or self.formulation_Tup:
-                theta = self.z.split()[self.temperature_id]
+                theta = split(self.z)[self.temperature_id]
                 jmp_penalty = self.problem.const_rel(U_jmp, theta)
             elif self.formulation_LTSup or self.formulation_TSup:
-                theta = self.z.split()[self.temperature_id]
+                theta = split(self.z)[self.temperature_id]
                 jmp_penalty = self.problem.explicit_cr(U_jmp, theta)
             else:
                 jmp_penalty = self.problem.explicit_cr(U_jmp)
@@ -625,9 +625,9 @@ class NonNewtonianSolver(object):
 #                ST = self.problem.const_rel(sym(grad(v))) #TODO: gls only works in the Newtonian case
             ST = 2. * self.nu * sym(grad(v))
         elif self.formulation_LSup or self.formulation_Sup or self.formulation_TSup or self.formulation_LTSup:
-            th_flux = self.problem.const_rel_temperature(theta, grad(theta))
             S = fields["S"]
             ST = fields["ST"]
+            if self.formulation_TSup or self.formulation_LTSup: th_flux = self.problem.const_rel_temperature(theta, grad(theta))
         elif self.formulation_Tup or self.formulation_LTup:
             th_flux = self.problem.const_rel_temperature(theta, grad(theta))
             S = self.problem.const_rel(sym(grad(u)), theta)
@@ -1048,36 +1048,8 @@ class NonNewtonianSolver(object):
                              "mat_mumps_cntl_5": 1e20,
                              }
         else:
-#========================= TEST======================================================
-            outer = {
-                "snes_type": "newtonls",
-                "snes_max_it":100,
-                "snes_linesearch_type": "l2",
-                "snes_linesearch_maxstep": 1.0,
-                "snes_monitor": None,
-                "snes_linesearch_monitor": None,
-                "snes_converged_reason": None,
-                "snes_rtol": 1.0e-9,
-                "snes_atol": 1.0e-8,
-                "snes_stol": 1.0e-6,
-                "mat_type": "aij",
-                "ksp_type": "fgmres",
-                "ksp_rtol": 1.0e-9,
-                "ksp_atol": 1.0e-10,
-                "ksp_max_it": 1,
-                "ksp_monitor_true_residual": None,
-                "ksp_converged_reason": None,
-                "ksp_convergence_test": "skip",
-                "pc_type": "lu",
-                "pc_factor_mat_solver_type": "mumps",
-                "mat_mumps_icntl_14": 300,#,200,
-                 "mat_mumps_icntl_24": 1,
-                # "mat_mumps_icntl_25": 1,
-                 "mat_mumps_cntl_1": 0.001,
-                 "mat_mumps_cntl_3": 0.0001,
-            }
+            return outer
 #====================================================TEST=============================
-        return outer
 
     def message(self, msg):
         if self.mesh.comm.rank == 0:
@@ -1593,7 +1565,7 @@ class HDivSolver(NonNewtonianSolver):
 
         #For the jump penalisation
         U_jmp = 2. * avg(outer(u,n))
-        penalty_form = "cr" #"plaw", "quadratic", "cr"
+        penalty_form = "quadratic" #"plaw", "quadratic", "cr"
         sigma = Constant(self.ip_magic) * self.Z.sub(self.velocity_id).ufl_element().degree()**2
         jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form)
 
