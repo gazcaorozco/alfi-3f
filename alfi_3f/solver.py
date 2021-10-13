@@ -1539,7 +1539,7 @@ class HDivSolver(NonNewtonianSolver):
             G = self.problem.const_rel(S, D) if self.formulation_Sup else self.problem.const_rel(S,D,theta)
         elif self.formulation_up or self.formulation_Tup:
             assert self.fluxes in ["ip"], "The Hdiv u-p formulation has only been implemented with the Interior Penalty method"
-            self.message(RED % "This Hdiv interior penalty u-p formulation only makes sense for a Newtonian constitutive relation S = 2. * nu * D  (and no viscous dissipation!) !!!!")
+            self.message(RED % "This Hdiv interior penalty u-p formulation only makes sense for a Newtonian constitutive relation S = 2. * nu * D  !!!!")
             G = 2. * self.nu * D if self.formulation_up else self.problem.const_rel(D, theta)
         elif self.formulation_LSup or self.formulation_LTSup:
             assert self.fluxes in ["ldg"], "The Hdiv L-S-u-p formulation has only been implemented with LDG fluxes"
@@ -1565,7 +1565,7 @@ class HDivSolver(NonNewtonianSolver):
 
         #For the jump penalisation
         U_jmp = 2. * avg(outer(u,n))
-        penalty_form = "quadratic" #"plaw", "quadratic", "cr"
+        penalty_form = "cr" #"plaw", "quadratic", "cr"
         sigma = Constant(self.ip_magic) * self.Z.sub(self.velocity_id).ufl_element().degree()**2
         jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form)
 
