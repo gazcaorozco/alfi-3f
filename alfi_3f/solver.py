@@ -545,8 +545,8 @@ class NonNewtonianSolver(object):
             (L_,theta,u, p) = split(z)
             (LT_,theta_,v, q) = split(TestFunction(Z))
         if self.formulation_Sup or self.formulation_Lup or self.formulation_LSup or self.formulation_LTup or self.formulation_LTSup:
-            L = self.stress_to_matrix(L_, False)
-            LT = self.stress_to_matrix(LT_, False)
+            L = self.stress_to_matrix(L_, self.exactly_div_free)
+            LT = self.stress_to_matrix(LT_, self.exactly_div_free)
             fields["L"] = L
             fields["LT"] = LT
         if self.formulation_has_temperature:
@@ -964,7 +964,7 @@ class NonNewtonianSolver(object):
         outer_base = {
             "snes_type": "newtonls",
             "snes_max_it": 100,
-            "snes_linesearch_type": "l2",#"l2",
+            "snes_linesearch_type": "basic",#"l2",
             "snes_linesearch_maxstep": 1.0,
             "snes_monitor": None,
             "snes_linesearch_monitor": None,
@@ -1565,7 +1565,7 @@ class HDivSolver(NonNewtonianSolver):
 
         #For the jump penalisation
         U_jmp = 2. * avg(outer(u,n))
-        penalty_form = "cr" #"plaw", "quadratic", "cr"
+        penalty_form = "quadratic" #"plaw", "quadratic", "cr"
         sigma = Constant(self.ip_magic) * self.Z.sub(self.velocity_id).ufl_element().degree()**2
         jmp_penalty = self.ip_penalty_jump(1./avg(h), U_jmp, form=penalty_form)
 
@@ -1795,10 +1795,10 @@ class RTSolver(HDivSolver):
         eleth = FiniteElement("CG", mesh.ufl_cell(), k)
         if self.tdim == 2:
             eles = VectorElement("DG", mesh.ufl_cell(), k-1)
-            eleL = VectorElement("DG", mesh.ufl_cell(), k-1, dim=3)
+            eleL = eles #VectorElement("DG", mesh.ufl_cell(), k-1, dim=3)
         else:
             eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=5)
-            eleL = VectorElement("DG", mesh.ufl_cell(), k-1, dim=6)
+            eleL = eles #VectorElement("DG", mesh.ufl_cell(), k-1, dim=6)
         eleu = FiniteElement("RT", mesh.ufl_cell(), k, variant="integral")
         elep = FiniteElement("Discontinuous Lagrange", mesh.ufl_cell(), k-1)
         if self.formulation_Sup:
@@ -1824,10 +1824,10 @@ class BDMSolver(HDivSolver):
         eleth = FiniteElement("CG", mesh.ufl_cell(), k)
         if self.tdim == 2:
             eles = VectorElement("DG", mesh.ufl_cell(), k-1)
-            eleL = VectorElement("DG", mesh.ufl_cell(), k-1, dim=3)
+            eleL = eles #VectorElement("DG", mesh.ufl_cell(), k-1, dim=3)
         else:
             eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=5)
-            eles = VectorElement("DG", mesh.ufl_cell(), k-1, dim=6)
+            eles = eles #VectorElement("DG", mesh.ufl_cell(), k-1, dim=6)
         eleu = FiniteElement("BDM", mesh.ufl_cell(), k, variant="integral")
         elep = FiniteElement("Discontinuous Lagrange", mesh.ufl_cell(), k-1)
         if self.formulation_Sup:

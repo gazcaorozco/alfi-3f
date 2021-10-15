@@ -102,8 +102,9 @@ if __name__ == "__main__":
 
         nu_temp = problem_.viscosity(theta)
         D = sym(grad(u))
+        symgrad_u = D if args.fields in ["Tup","TSup"] else D + L
         SS = interpolate(S,TensorFunctionSpace(solver_.z.ufl_domain(),"DG",k-1))
-        DD = interpolate(D+L,TensorFunctionSpace(solver_.z.ufl_domain(),"DG",k-1))
+        DD = interpolate(D+symgrad_u,TensorFunctionSpace(solver_.z.ufl_domain(),"DG",k-1))
         nu_temp_ = interpolate(nu_temp, FunctionSpace(solver_.z.ufl_domain(),"CG",k-1))
         u.rename("Velocity")
         p.rename("Pressure")
