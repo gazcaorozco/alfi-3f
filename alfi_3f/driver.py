@@ -1,5 +1,5 @@
 from alfi_3f.solver import ScottVogeliusSolver, TaylorHoodSolver, P1P1Solver, P1P0Solver
-from alfi_3f.other_models.oldroydB import OldroydBSVSolver, OldroydBSVDGSolver
+from alfi_3f.other_models.oldroydB import OldroydBSVSolver#, OldroydBSVDGSolver
 from mpi4py import MPI
 from firedrake.petsc import PETSc
 from firedrake import *
@@ -162,8 +162,8 @@ def get_solver(args, problem, hierarchy_callback=None):
                 "th": TaylorHoodSolver,
                 "p1p1": P1P1Solver,
                 "p1p0": P1P0Solver,
-                "oldroydSV": OldroydBSVSolver,
-                "oldroydSVDG": OldroydBSVDGSolver}[args.discretisation]
+                "oldroydSV": OldroydBSVSolver}[args.discretisation]
+                #"oldroydSVDG": OldroydBSVDGSolver}[args.discretisation]
 
     solver = solver_t(
         problem,
@@ -190,7 +190,7 @@ def get_solver(args, problem, hierarchy_callback=None):
         low_accuracy=args.low_accuracy,
         hierarchy_callback=hierarchy_callback,
         no_convection=args.no_convection,
-        traceless_stress = True if args.discretisation in ["sv", "hdiv-ldg"] else False
+        traceless_stress = True if args.discretisation in ["sv"] else False
     )
     return solver
 
