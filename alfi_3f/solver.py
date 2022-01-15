@@ -87,7 +87,7 @@ class NonNewtonianSolver(object):
         self.formulation_Tup = (self.formulation == "T-u-p")
         self.formulation_has_stress = self.formulation_Sup or self.formulation_LSup or self.formulation_TSup
         if self.stabilisation_type_u == "gls": assert formulation_up or formulation_Tup, "GLS stabilisation has not implemented for formulations including the stress"
-        if (self.formulation_Tup or self.formulation_TSup): assert not(self.scalar_conv is None), "You have to choose the convection regime (natural or forced)"
+        if (self.formulation_Tup or self.formulation_TSup): assert not(self.scalar_conv is None), "You have to choose the convection regime (e.g. natural or forced)"
         def rebalance(dm, i):
             if rebalance_vertices:
                 # if not dm.rebalanceSharedPoints(useInitialGuess=False, parallel=False):
@@ -275,7 +275,7 @@ class NonNewtonianSolver(object):
 
         #Temperature stabilisation
         if self.stabilisation_type_t in ["supg"]:
-            assert self.formulation_Tup or self.formulation_TSup, "Setting stabilisation-type-t only makes sense for non-isothermal problems..."
+            assert self.formulation_Tup or self.formulation_TSup, "Setting stabilisation-type-t only makes sense for problems coupled to an extra scalar field..."
             if self.scalar_conv in ["natural_Ra", "natural_Ra2"]:
                 supg_diffusion_parameter_t = Constant(1.)
             elif self.scalar_conv == "natural_Gr":
@@ -429,7 +429,7 @@ class NonNewtonianSolver(object):
                 if not("Theta" in list(self.problem.const_rel_params.keys())): self.Theta = Constant(0.)
                 g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
 
-                #Common to all formulations with temperature
+                #Common to all formulations with temperature (or extra scalar field)
                 J0 = (
                     self.gamma * inner(div(u0), div(v))*dx
                     - p0 * div(v) * dx
@@ -529,7 +529,7 @@ class NonNewtonianSolver(object):
                     J0 += (
                         + self.advect * inner(dot(grad(u0), u), v) * dx
                         + (1./self.Pe) * inner(th_flux0, grad(theta_)) * dx
-                    )
+                        )
                     if self.formulation_Tup:
                         J0 += (1./self.Re) * inner(G0, sym(grad(v))) * dx
                         #Newton linearisation of the dissipation term (not sure if  this is the best way)
