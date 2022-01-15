@@ -33,7 +33,7 @@ class NonNewtonianSolver(object):
                  supg_method_u="shakib", supg_method_t="shakib", supg_magic=9.0, gamma=10000, k=3,
                  patch="macro", hierarchy="bary", use_mkl=False, stabilisation_weight_u=None, stabilisation_weight_t=None,
                  patch_composition="additive", restriction=False, smoothing=None, cycles=None,
-                 rebalance_vertices=False, hierarchy_callback=None, high_accuracy=False, thermal_conv="none",
+                 rebalance_vertices=False, hierarchy_callback=None, high_accuracy=False, scalar_conv="none",
                  linearisation = "newton", low_accuracy = False, no_convection = False, traceless_stress = True):
 
         assert solver_type in {"almg", "allu", "lu", "aljacobi", "alamg", "simple"}, "Invalid solver type %s" % solver_type
@@ -46,9 +46,9 @@ class NonNewtonianSolver(object):
         assert hierarchy in {"uniform", "bary", "uniformbary"}, "Invalid hierarchy type %s" % hierarchy
         assert patch in {"macro", "star"}, "Invalid patch type %s" % patch
         assert linearisation in {"newton", "picard", "kacanov"}, "Invalid linearisation type %s" % linearisation
-        if thermal_conv == "none":
-            thermal_conv = None
-        assert thermal_conv in {None, "natural_Ra", "natural_Ra2", "natural_Gr", "forced"}, "Invalid thermal convection regime %s" % thermal_conv
+        if scalar_conv == "none":
+            scalar_conv = None
+        assert scalar_conv in {None, "natural_Ra", "natural_Ra2", "natural_Gr", "forced", "forced2"}, "Invalid scalar convection regime %s" % scalar_conv
         if hierarchy != "bary" and patch == "macro":
             raise ValueError("macro patch only makes sense with a BaryHierarchy")
         self.hierarchy = hierarchy
@@ -67,7 +67,7 @@ class NonNewtonianSolver(object):
         self.low_accuracy = low_accuracy
         self.no_convection = no_convection
         self.traceless_stress = traceless_stress
-        self.thermal_conv = thermal_conv
+        self.scalar_conv = scalar_conv
         self.formulation = self.problem.formulation
         self.linearisation = linearisation
         assert self.formulation in {
@@ -87,7 +87,7 @@ class NonNewtonianSolver(object):
         self.formulation_Tup = (self.formulation == "T-u-p")
         self.formulation_has_stress = self.formulation_Sup or self.formulation_LSup or self.formulation_TSup
         if self.stabilisation_type_u == "gls": assert formulation_up or formulation_Tup, "GLS stabilisation has not implemented for formulations including the stress"
-        if (self.formulation_Tup or self.formulation_TSup): assert not(self.thermal_conv is None), "You have to choose the convection regime (natural or forced)"
+        if (self.formulation_Tup or self.formulation_TSup): assert not(self.scalar_conv is None), "You have to choose the convection regime (natural or forced)"
         def rebalance(dm, i):
             if rebalance_vertices:
                 # if not dm.rebalanceSharedPoints(useInitialGuess=False, parallel=False):
@@ -129,8 +129,8 @@ class NonNewtonianSolver(object):
                 setattr(self, param_str, Constant(getattr(self, param_str)))
             self.const_rel_params[param_str] = getattr(self, param_str)
         #Make sure either nu or Re are defined
-        if self.thermal_conv in ["natural_Ra", "natural_Ra2", "natural_Gr"]:
-            self.Re = sqrt(self.Gr) if self.thermal_conv == "natural_Gr" else self.Ra
+        if self.scalar_conv in ["natural_Ra", "natural_Ra2", "natural_Gr"]:
+            self.Re = sqrt(self.Gr) if self.scalar_conv == "natural_Gr" else self.Ra
             self.nu = 1./self.Re
         else:
             assert any(elem in list(self.problem.const_rel_params.keys()) for elem in ["nu","Re"]), "The constitutive relation must include either the Reynolds Re number or visosity nu"
@@ -239,11 +239,11 @@ class NonNewtonianSolver(object):
         if self.stabilisation_type_u in ["gls", "supg"]:
             #Define the parameter that causes dominant convection as it grows (should we use an effective viscosity for this?)
             if self.formulation_Tup or self.formulation_TSup:
-                if self.thermal_conv in ["natural_Ra", "natural_Ra2"]:
+                if self.scalar_conv in ["natural_Ra", "natural_Ra2"]:
                     supg_diffusion_parameter_u = self.Ra/self.Pr
-                elif self.thermal_conv == "natural_Gr":
+                elif self.scalar_conv == "natural_Gr":
                     supg_diffusion_parameter_u = sqrt(self.Gr)
-                elif self.thermal_conv == "forced":
+                elif self.scalar_conv == "forced":
                     supg_diffusion_parameter_u = self.Re
             else:
                 supg_diffusion_parameter_u = 1./self.nu
@@ -276,11 +276,11 @@ class NonNewtonianSolver(object):
         #Temperature stabilisation
         if self.stabilisation_type_t in ["supg"]:
             assert self.formulation_Tup or self.formulation_TSup, "Setting stabilisation-type-t only makes sense for non-isothermal problems..."
-            if self.thermal_conv in ["natural_Ra", "natural_Ra2"]:
+            if self.scalar_conv in ["natural_Ra", "natural_Ra2"]:
                 supg_diffusion_parameter_t = Constant(1.)
-            elif self.thermal_conv == "natural_Gr":
+            elif self.scalar_conv == "natural_Gr":
                 supg_diffusion_parameter_t = self.Pr*sqrt(self.Gr)
-            elif self.thermal_conv == "forced":
+            elif self.scalar_conv in ["forced", "forced2"]:
                 supg_diffusion_parameter_t = self.Pe
 
             if supg_method_t == "turek":
@@ -437,7 +437,7 @@ class NonNewtonianSolver(object):
                     + inner(dot(grad(theta0), u), theta_) * dx
                 )
 
-                if self.thermal_conv == "natural_Ra":
+                if self.scalar_conv == "natural_Ra":
                     J0 += (
                         self.advect * inner(dot(grad(u0), u), v)*dx
                         - (self.Ra*self.Pr) * inner(theta0*g, v) * dx
@@ -459,7 +459,7 @@ class NonNewtonianSolver(object):
                             - (self.Di/self.Ra) * inner(inner(S,sym(grad(u0))), theta_) * dx
                             )
 
-                elif self.thermal_conv == "natural_Ra2":
+                elif self.scalar_conv == "natural_Ra2":
                     J0 += (
                         + (1./self.Pr) * self.advect * inner(dot(grad(u0), u), v)*dx
                         - (self.Ra) * inner(theta0*g, v) * dx
@@ -478,7 +478,7 @@ class NonNewtonianSolver(object):
                             - (self.Di/self.Ra) * inner(inner(S0,sym(grad(u))), theta_) * dx
                             - (self.Di/self.Ra) * inner(inner(S,sym(grad(u0))), theta_) * dx
                             )
-                elif self.thermal_conv == "natural_Gr":
+                elif self.scalar_conv == "natural_Gr":
                     J0 += (
                         self.advect * inner(dot(grad(u0), u), v)*dx
                         - inner(theta0*g, v) * dx
@@ -498,7 +498,7 @@ class NonNewtonianSolver(object):
                             - (self.Di/sqrt(self.Gr)) * inner(inner(S,sym(grad(u0))), theta_) * dx
                             )
 
-                elif self.thermal_conv == "forced":
+                elif self.scalar_conv == "forced":
                     """
                     For the forced convection regime I choose a characteristic velocity, and so the Peclet and
                     Reynolds numbers will appear in the formulation
@@ -520,11 +520,27 @@ class NonNewtonianSolver(object):
                             - (self.Br/self.Pe) * inner(inner(S0,sym(grad(u))), theta_) * dx
                             - (self.Br/self.Pe) * inner(inner(S,sym(grad(u0))), theta_) * dx
                             )
+
+                elif self.scalar_conv == "forced2":
+                    """
+                    This chooses a different way to balance the pressure
+
+                    """
+                    J0 += (
+                        + self.advect * inner(dot(grad(u0), u), v) * dx
+                        + (1./self.Pe) * inner(th_flux0, grad(theta_)) * dx
+                    )
+                    if self.formulation_Tup:
+                        J0 += (1./self.Re) * inner(G0, sym(grad(v))) * dx
+                        #Newton linearisation of the dissipation term (not sure if  this is the best way)
+                    elif self.formulation_TSup:
+                        raise NotImplementedError
+
             if (self.linearisation == "kacanov"):
                 #Add extra term for Newton linearisation of the convective term
-                if (self.formulation_Tup or self.formulation_TSup) and (self.thermal_conv == "natural_Ra2"):
+                if (self.formulation_Tup or self.formulation_TSup) and (self.scalar_conv == "natural_Ra2"):
                     J0 += (1./self.Pr) * self.advect * inner(dot(grad(u), u0), v)*dx
-                elif (self.formulation_Tup or self.formulation_TSup) and (self.thermal_conv == "forced"):
+                elif (self.formulation_Tup or self.formulation_TSup) and (self.scalar_conv == "forced"):
                     J0 += self.Re * self.advect * inner(dot(grad(u), u0), v)*dx
                 else:
                     J0 += self.advect * inner(dot(grad(u), u0), v)*dx
@@ -640,18 +656,21 @@ class NonNewtonianSolver(object):
                 LL_ = -div(ST) + self.advect*dot(grad(v), wind) + grad(q)  #TODO: What if linearisation="newton"?
             elif self.formulation_Tup or self.formulation_TSup:
 
-                if self.thermal_conv == "natural_Ra":
+                if self.scalar_conv == "natural_Ra":
                     LL = - self.Pr*div(S) + self.advect*dot(grad(u),u) + grad(p) - self.Ra*self.Pr*theta*g
                     LL_ = - self.Pr*div(ST) + self.advect*dot(grad(v), wind) + grad(q) - self.Ra*self.Pr*theta_*g
-                elif self.thermal_conv == "natural_Ra2":
+                elif self.scalar_conv == "natural_Ra2":
                     LL = -div(S) + (self.advect/self.Pr)*dot(grad(u),u) + grad(p) - self.Ra*theta*g
                     LL_ = -div(ST) + (self.advect/self.Pr)*dot(grad(v), wind) + grad(q) - self.Ra*theta_*g
-                elif self.thermal_conv == "natural_Gr":
+                elif self.scalar_conv == "natural_Gr":
                     LL = -(1./sqrt(self.Gr))*div(S) + self.advect*dot(grad(u),u) + grad(p) - theta*g
                     LL_ = -(1./sqrt(self.Gr))*div(ST) + self.advect*dot(grad(v), wind) + grad(q) - theta_*g
-                elif self.thermal_conv == "forced":
+                elif self.scalar_conv == "forced":
                     LL = -div(S) + self.Re*self.advect*dot(grad(u),u) + grad(p)
                     LL_ = -div(ST) + self.Re*self.advect*dot(grad(v), wind) + grad(q)
+                elif self.scalar_conv == "forced2":
+                    LL = -(1./self.Re) * div(S) + self.advect*dot(grad(u),u) + grad(p)
+                    LL_ = -(1./self.Re) * div(ST) + self.advect*dot(grad(v), wind) + grad(q)
 
             if rhs is not None:
                 LL -= rhs_u
@@ -659,12 +678,14 @@ class NonNewtonianSolver(object):
         elif type == "temperature":
            LL_ = None
 
-           if self.thermal_conv in ["natural_Ra", "natural_Ra2"]:
+           if self.scalar_conv in ["natural_Ra", "natural_Ra2"]:
                LL = -div(th_flux) + div(theta*u) + self.Di*(theta + self.Theta)*dot(g,u) - (self.Di/self.Ra)*inner(S,D)
-           elif self.thermal_conv == "natural_Gr":
+           elif self.scalar_conv == "natural_Gr":
                LL = -(1./(self.Pr*sqrt(self.Gr)))*div(th_flux) + div(theta*u) + self.Di*(theta + self.Theta)*dot(g,u) - (self.Di/sqrt(self.Gr))*inner(S,D)
-           elif self.thermal_conv == "forced":
+           elif self.scalar_conv == "forced":
                LL = -(1./self.Pe)*div(th_flux) + div(theta*u) - (self.Br/self.Pe)*inner(S,D)
+           elif self.scalar_conv == "forced2":
+               LL = -(1./self.Pe) * div(th_flux) + div(theta*u)
 
            if rhs is not None:
                LL -= rhs_theta
@@ -1121,7 +1142,7 @@ class ConformingSolver(NonNewtonianSolver):
                 + inner(dot(grad(theta), u), theta_) * dx
             )
 
-            if self.thermal_conv == "natural_Ra":
+            if self.scalar_conv == "natural_Ra":
                 F += (
                     self.advect * inner(dot(grad(u), u), v)*dx
                     - (self.Ra*self.Pr) * inner(theta*g, v) * dx
@@ -1140,7 +1161,7 @@ class ConformingSolver(NonNewtonianSolver):
                         - (self.Di/self.Ra) * inner(inner(S,sym(grad(u))), theta_) * dx
                         )
 
-            elif self.thermal_conv == "natural_Ra2":
+            elif self.scalar_conv == "natural_Ra2":
                 F += (
                     + (1./self.Pr) * self.advect * inner(dot(grad(u), u), v)*dx
                     - (self.Ra) * inner(theta*g, v) * dx
@@ -1159,7 +1180,7 @@ class ConformingSolver(NonNewtonianSolver):
                         - (self.Di/self.Ra) * inner(inner(S,sym(grad(u))), theta_) * dx
                         )
 
-            elif self.thermal_conv == "natural_Gr":
+            elif self.scalar_conv == "natural_Gr":
                 F += (
                     self.advect * inner(dot(grad(u), u), v)*dx
                     - inner(theta*g, v) * dx
@@ -1177,7 +1198,7 @@ class ConformingSolver(NonNewtonianSolver):
                         - inner(G,ST) * dx
                         - (self.Di/sqrt(self.Gr)) * inner(inner(S,sym(grad(u))), theta_) * dx
                         )
-            elif self.thermal_conv == "forced":
+            elif self.scalar_conv == "forced":
                 """
                 For the forced convection regime I choose a characteristic velocity, and so the Peclet and
                 Reynolds numbers will appear in the formulation
@@ -1199,6 +1220,19 @@ class ConformingSolver(NonNewtonianSolver):
                         - inner(G,ST) * dx
                         - (self.Br/self.Pe) * inner(inner(S,sym(grad(u))), theta_) * dx
                         )
+            elif self.scalar_conv == "forced2":
+                """
+                Different pressure scaling and only diffusion-advection terms (e.g. for things other than temperature)
+
+                """
+                F += (
+                    + self.advect * inner(dot(grad(u), u), v) * dx
+                    + (1./self.Pe) * inner(th_flux, grad(theta_)) * dx
+                )
+                if self.formulation_Tup:
+                    F += (1./self.Re) * inner(G, sym(grad(v))) * dx
+                elif self.formulation_TSup:
+                    raise NotImplementedError
 
         return F
 
@@ -1358,14 +1392,16 @@ class P1P1Solver(TaylorHoodSolver):
             if self.formulation_Tup or self.formulation_TSup:
                 g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
                 theta = fields["theta"]
-                if self.thermal_conv == "natural_Ra":
+                if self.scalar_conv == "natural_Ra":
                     F += - delta * inner(self.advect*dot(grad(u), u) + grad(p) - self.Ra*self.Pr*theta*g, grad(q)) * dx
-                elif self.thermal_conv == "natural_Ra2":
+                elif self.scalar_conv == "natural_Ra2":
                     F += - delta * inner((self.advect/self.Pr)*dot(grad(u), u) + grad(p) - self.Ra*theta*g, grad(q)) * dx
-                elif self.thermal_conv == "natural_Gr":
+                elif self.scalar_conv == "natural_Gr":
                     F += - delta * inner(self.advect*dot(grad(u), u) + grad(p) - theta*g, grad(q)) * dx
-                elif self.thermal_conv == "forced":
+                elif self.scalar_conv == "forced":
                     F += - delta * inner(self.Re*self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
+                elif self.scalar_conv == "forced2":
+                    F += - delta * inner(self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
 
             else:
                 F += - delta * inner(self.advect*dot(grad(u), u) + grad(p), grad(q)) * dx
@@ -1404,27 +1440,29 @@ class P1P1Solver(TaylorHoodSolver):
                 theta = fields["theta"]
                 theta0 = fields0["theta"]
                 g = Constant((0, 1)) if self.tdim == 2 else Constant((0, 0, 1))
-                if self.thermal_conv == "natural_Ra":
+                if self.scalar_conv == "natural_Ra":
                     J0 += - delta * inner(self.advect*dot(grad(u0), u) + grad(p0) - self.Ra*self.Pr*theta0*g, grad(q)) * dx
-                elif self.thermal_conv == "natural_Ra2":
+                elif self.scalar_conv == "natural_Ra2":
                     J0 += - delta * inner((self.advect/self.Pr)*dot(grad(u0), u) + grad(p0) - self.Ra*theta0*g, grad(q)) * dx
-                elif self.thermal_conv == "natural_Gr":
+                elif self.scalar_conv == "natural_Gr":
                     J0 += - delta * inner(self.advect*dot(grad(u0), u) + grad(p0) - theta0*g, grad(q)) * dx
-                elif self.thermal_conv == "forced":
+                elif self.scalar_conv == "forced":
                     J0 += - delta * inner(self.Re*self.advect*dot(grad(u0), u) + grad(p0), grad(q)) * dx
+                elif self.scalar_conv == "forced2":
+                    J0 += - delta * inner(self.advect*dot(grad(u0), u) + grad(p0), grad(q)) * dx
 
             else:
                 J0 += - delta * inner(self.advect*dot(grad(u0), u) + grad(p0), grad(q)) * dx
 
             if self.linearisation == "kacanov": #Newton linearisation of the convective term
                 if self.formulation_Tup or self.formulation_TSup:
-                    if self.thermal_conv == "natural_Ra":
+                    if self.scalar_conv == "natural_Ra":
                         J0 += - delta * inner(self.advect*dot(grad(u), u0), grad(q)) * dx
-                    elif self.thermal_conv == "natural_Ra2":
+                    elif self.scalar_conv == "natural_Ra2":
                         J0 += - delta * inner((self.advect/self.Pr)*dot(grad(u), u0), grad(q)) * dx
-                    elif self.thermal_conv == "natural_Gr":
+                    elif self.scalar_conv == "natural_Gr":
                         J0 += - delta * inner(self.advect*dot(grad(u), u0), grad(q)) * dx
-                    elif self.thermal_conv == "forced":
+                    elif self.scalar_conv == "forced":
                         J0 += - delta * inner(self.Re*self.advect*dot(grad(u), u0), grad(q)) * dx
 
                 else:
