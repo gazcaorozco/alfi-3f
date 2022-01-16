@@ -1,9 +1,13 @@
-from pprint import pprint
+## python mms.py --dim 2 --rheol newtonian --zdamping 1.0 --mh bary --patch macro --solver-type lu --gamma 0.0 --nref 2 --k 2 --linearisation newton --discretisation synovialSV --scalar-conv forced2
+from firedrake import *
+
+from alfi_3f import get_default_parser, get_solver, run_solver
+from alfi_3f.other_models.synovial import SynovialSVSolver
 from mms2d import SynovialMMS2D
 from mms3d import SynovialMMS3D
-from alfi_3f import get_default_parser, get_solver, run_solver
+
 import os
-from firedrake import *
+from pprint import pprint
 import numpy as np
 #import inflect
 #eng = inflect.engine()
@@ -19,10 +23,13 @@ parser.add_argument("--rheol", type=str, default="newtonian",
                         choices=["synovial", "power-law", "newtonian"])
 parser.add_argument("--variation", type=str, default="Pe",
                        choices=["alpha", "Re", "Pe"])
+parser.add_argument("--zdamping", type=float, default=1.0)
 args, _ = parser.parse_known_args()
 
+assert args.scalar_conv == "forced2", "This model only works with 'forced2' scalar_conv"
 advect = Constant(1.)
 if args.no_convection: advect.assign(0.)
+zdamping = args.zdamping
 
 #Rheological parameters
 if args.variation == "Pe":
@@ -57,12 +64,12 @@ print("We'll compute the erros for: ", params_to_check)
 
 if args.dim == 2:
     if args.fields == "cup":
-        problem_ = SynovialMMS2D(advect=advect, rheol=args.rheol, Pe=Pe, Re=Re, alpha=alpha, beta=beta, eps=eps)
+        problem_ = SynovialMMS2D(advect=advect, rheol=args.rheol, Pe=Pe, Re=Re, alpha=alpha, beta=beta, eps=eps, zdamping=zdamping)
     else:
         raise NotImplementedError
 else:
     if args.fields == "cup":
-        problem_ = SynovialMMS3D(advect=advect, rheol=args.rheol, Pe=Pe, Re=Re, alpha=alpha, beta=beta, eps=eps)
+        problem_ = SynovialMMS3D(advect=advect, rheol=args.rheol, Pe=Pe, Re=Re, alpha=alpha, beta=beta, eps=eps, zdamping=zdamping)
     else:
         raise NotImplementedError
 

@@ -1,5 +1,6 @@
 from alfi_3f.solver import ScottVogeliusSolver, TaylorHoodSolver, P1P1Solver, P1P0Solver
 from alfi_3f.other_models.oldroydB import OldroydBSVSolver#, OldroydBSVDGSolver
+from alfi_3f.other_models.synovial import SynovialSVSolver
 from mpi4py import MPI
 from firedrake.petsc import PETSc
 from firedrake import *
@@ -34,11 +35,11 @@ def get_default_parser():
     parser.add_argument("--stabilisation-type-t", type=str, default=None,
                         choices=["none", "supg", "burman"])
     parser.add_argument("--linearisation", type=str, default="newton",
-                        choices=["newton", "picard", "kacanov"]) #kacanov=full Picard
+                        choices=["newton", "picard", "kacanov", "zarantonello"])
     parser.add_argument("--scalar-conv", type=str, default="none",
                         choices=["none", "natural_Ra", "natural_Ra2", "natural_Gr", "forced", "forced2"])
     parser.add_argument("--discretisation", type=str, required=True,
-                        choices=["sv","th","p1p1","p1p0","oldroydSV","oldroydSVDG"])
+                        choices=["sv","th","p1p1","p1p0","oldroydSV","synovialSV"])
     parser.add_argument("--gamma", type=float, default=1e4)
     parser.add_argument("--clear", dest="clear", default=False,
                         action="store_true")
@@ -162,7 +163,8 @@ def get_solver(args, problem, hierarchy_callback=None):
                 "th": TaylorHoodSolver,
                 "p1p1": P1P1Solver,
                 "p1p0": P1P0Solver,
-                "oldroydSV": OldroydBSVSolver}[args.discretisation]
+                "oldroydSV": OldroydBSVSolver,
+                "synovialSV": SynovialSVSolver}[args.discretisation]
                 #"oldroydSVDG": OldroydBSVDGSolver}[args.discretisation]
 
     solver = solver_t(

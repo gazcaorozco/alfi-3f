@@ -45,7 +45,7 @@ class NonNewtonianSolver(object):
         assert stabilisation_type_t in {None, "supg", "burman"}, "Invalid stabilisation type %s" % stabilisation_type_t
         assert hierarchy in {"uniform", "bary", "uniformbary"}, "Invalid hierarchy type %s" % hierarchy
         assert patch in {"macro", "star"}, "Invalid patch type %s" % patch
-        assert linearisation in {"newton", "picard", "kacanov"}, "Invalid linearisation type %s" % linearisation
+        assert linearisation in {"newton", "picard", "kacanov", "zarantonello"}, "Invalid linearisation type %s" % linearisation
         if scalar_conv == "none":
             scalar_conv = None
         assert scalar_conv in {None, "natural_Ra", "natural_Ra2", "natural_Gr", "forced", "forced2"}, "Invalid scalar convection regime %s" % scalar_conv
@@ -146,6 +146,10 @@ class NonNewtonianSolver(object):
             self.gamma.assign(0)
             warning("Setting gamma to 0")
         self.advect = Constant(0)
+
+        #Make sure damping is defined for Zarantonello iterations.
+        if self.linearisation == "zarantonello":
+            if not("zdamping" in list(self.problem.const_rel_params.keys())): self.zdamping = 1.0
 
         mesh = mh[-1]
 
@@ -344,6 +348,8 @@ class NonNewtonianSolver(object):
             self.F_nograddiv = replace(F, {gamma: 0})
 
     def get_jacobian(self):
+        if self.linearisation == "zarantonello":
+            raise NotImplementedError
         if self.linearisation == "newton":
             J0 = derivative(self.F, self.z)
         elif self.linearisation in ["picard", "kacanov"]:
@@ -532,7 +538,6 @@ class NonNewtonianSolver(object):
                         )
                     if self.formulation_Tup:
                         J0 += (1./self.Re) * inner(G0, sym(grad(v))) * dx
-                        #Newton linearisation of the dissipation term (not sure if  this is the best way)
                     elif self.formulation_TSup:
                         raise NotImplementedError
 
@@ -961,8 +966,9 @@ class NonNewtonianSolver(object):
         outer_base = {
             "snes_type": "newtonls",
             "snes_max_it": 100,
-            "snes_linesearch_type": "basic",#"l2",
+            "snes_linesearch_type": "basic" if (self.linearisation == "zarantonello") else "l2",#"basic",
             "snes_linesearch_maxstep": 1.0,
+            "snes_linesearch_damping": float(self.zdamping),
             "snes_monitor": None,
             "snes_linesearch_monitor": None,
             "snes_converged_reason": None,
