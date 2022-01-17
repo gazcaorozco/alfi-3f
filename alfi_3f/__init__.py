@@ -10,7 +10,7 @@ from alfi_3f.solver import ScottVogeliusSolver
 from alfi_3f.solver import P1P1Solver
 from alfi_3f.solver import P1P0Solver
 from alfi_3f.other_models.oldroydB import OldroydBSVSolver#, OldroydBSVDGSolver
-from alfi_3f.other_models.synovial import SynovialSVSolver
+from alfi_3f.other_models.synovial import SynovialSVSolver, SynovialTHSolver
 from alfi_3f.driver import *
 from alfi.relaxation import *
 from alfi.bary import *

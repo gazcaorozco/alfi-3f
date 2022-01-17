@@ -58,6 +58,13 @@ class SynovialSolver(ConformingSolver):
                 J0 += self.advect * inner(dot(grad(u), u0), v)*dx
                 J0 += inner(dot(grad(conc), u0), conc_) * dx
 
+            #Terms arising from stabilisation
+            if self.stabilisation_form_u is not None:
+               J0 += derivative(self.stabilisation_form_u, self.z, w)
+
+            if self.stabilisation_form_t is not None:
+               J0 += derivative(self.stabilisation_form_t, self.z, w)
+
             if (self.linearisation == "zarantonello"):
             #TODO: How should one choose the Riesz map? Instead of this we could e.g. use the main part of the Kacanov operator
             #TODO: Should the SUPG, etc. terms be added here?
@@ -69,12 +76,6 @@ class SynovialSolver(ConformingSolver):
                     + (1./self.Re) * inner(sym(grad(u0)), sym(grad(v))) * dx
                 )
 
-            #Terms arising from stabilisation
-            if self.stabilisation_form_u is not None:
-               J0 += derivative(self.stabilisation_form_u, self.z, w)
-
-            if self.stabilisation_form_t is not None:
-               J0 += derivative(self.stabilisation_form_t, self.z, w)
 
         return J0
 
@@ -118,3 +119,25 @@ class SynovialSVSolver(SynovialSolver):
 
     def distribution_parameters(self):
         return {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 2)}
+
+class SynovialTHSolver(SynovialSVSolver):
+
+    def function_space(self, mesh, k):
+        elec = FiniteElement("Lagrange", mesh.ufl_cell(), k)
+        eleu = VectorElement("Lagrange", mesh.ufl_cell(), k)
+        elep = FiniteElement("Lagrange", mesh.ufl_cell(), k-1)
+        Z = FunctionSpace(mesh, MixedElement([elec,eleu,elep]))
+
+        return Z
+
+    def get_transfers(self):
+
+        V = self.Z.sub(self.velocity_id)
+        Q = self.Z.sub(self.pressure_id)
+        C = self.Z.sub(self.temperature_id)
+
+        transfers = {V.ufl_element(): (prolong, restrict, inject),
+                    Q.ufl_element(): (prolong, restrict, inject),
+                     C.ufl_element(): (prolong, restrict, inject)}
+
+        return transfers

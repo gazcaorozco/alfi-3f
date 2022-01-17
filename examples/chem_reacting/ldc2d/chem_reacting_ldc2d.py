@@ -85,8 +85,10 @@ if __name__ == "__main__":
                         choices=["synovial", "synovial2", "power-law", "newtonian"])
     parser.add_argument("--plots", dest="plots", default=False,
                         action="store_true")
+    parser.add_argument("--zdamping", type=float, default=1.0)
     args, _ = parser.parse_known_args()
 
+    zdamping = args.zdamping
     #Rheological parameters
     if args.rheol in ["synovial","synovial2"]:
         alphas = [0.0,2.0,3.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
@@ -113,7 +115,7 @@ if __name__ == "__main__":
         epss = [0.001]; eps = Constant(epss[0])
         Pe_s = [100.]; Pe = Constant(Pe_s[0])
 
-    problem_ = ChemicallyReactingLDC(rheol=args.rheol, Pe=Pe, nu=nu, alpha=alpha, beta=beta, eps=eps)
+    problem_ = ChemicallyReactingLDC(rheol=args.rheol, Pe=Pe, nu=nu, alpha=alpha, beta=beta, eps=eps, zdamping=zdamping)
 
     solver_ = get_solver(args, problem_)
     problem_.interpolate_initial_guess(solver_.z)

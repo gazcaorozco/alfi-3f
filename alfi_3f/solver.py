@@ -966,9 +966,9 @@ class NonNewtonianSolver(object):
         outer_base = {
             "snes_type": "newtonls",
             "snes_max_it": 100,
-            "snes_linesearch_type": "basic" if (self.linearisation == "zarantonello") else "l2",#"basic",
+            "snes_linesearch_type": "basic" if (self.linearisation == "zarantonello") else "basic",#"basic",
             "snes_linesearch_maxstep": 1.0,
-            "snes_linesearch_damping": float(self.zdamping),
+            "snes_linesearch_damping": float(self.zdamping) if (self.linearisation == "zarantonello") else 1.0,
             "snes_monitor": None,
             "snes_linesearch_monitor": None,
             "snes_converged_reason": None,

@@ -45,7 +45,8 @@ if args.variation == "Pe":
     Pe_s5 = [1e5]; Pe_s.append(Pe_s5)
     Pe = Constant(Pe_s[0][0])
     if args.rheol == "synovial":
-        alphas = [2.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
+        alphas = [0.0, 1.0, 2.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
+        alphas = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
 
     elif args.rheol == "power-law":
         alphas = [2.0, 1.6]; alpha = Constant(alphas[0]) #Newtonian alpha=2
@@ -54,7 +55,8 @@ if args.variation == "Pe":
         #Dummy parameters
         alphas = [2.0]; alpha = Constant(alphas[0])
     const_params_list = [{"beta": betas, "eps": epss, "Re": Re_s, "alpha": alphas, "Pe": Pe_s[0]}]
-    for Pe_ in Pe_s[1:]:
+#    for Pe_ in Pe_s[1:]:
+    for Pe_ in Pe_s[1:2]:
         const_params_list.append({"beta": [betas[-1]], "eps": [epss[-1]], "Re": [Re_s[-1]], "alpha": [alphas[-1]], "Pe": Pe_})
     params_to_check = {"Pe": [a[-1] for a in Pe_s]}
 
@@ -117,7 +119,7 @@ for nref in range(1, args.nref+1):
         pintegral = assemble(p*dx)
 
         if problem_.rheol == "power-law":
-            r_exp = float(solver_.r)
+            r_exp = float(solver_.alpha)
             r_exp_conj = r_exp/(r_exp - 1.)
         else:    #TODO: How do we actually measure the errors in the synovial case?
             r_exp = 2.0
