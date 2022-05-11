@@ -4,6 +4,8 @@ from alfi.transfer import *
 
 from alfi_3f.solver import ConformingSolver
 
+import copy
+
 class SynovialSolver(ConformingSolver):
 
     def get_jacobian(self):
@@ -66,18 +68,199 @@ class SynovialSolver(ConformingSolver):
                J0 += derivative(self.stabilisation_form_t, self.z, w)
 
             if (self.linearisation == "zarantonello"):
-            #TODO: How should one choose the Riesz map? Instead of this we could e.g. use the main part of the Kacanov operator
-            #TODO: Should the SUPG, etc. terms be added here?
                 J0 = (
     #                self.gamma * inner(div(u0), div(v))*dx
-                    - p0 * div(v) * dx
+                    - self.zdamping * p0 * div(v) * dx
                     - div(u0) * q * dx
-                    + (1./self.Pe) * inner(grad(conc0), grad(conc_)) * dx
-                    + (1./self.Re) * inner(sym(grad(u0)), sym(grad(v))) * dx
+#                    + (1./self.Pe) * inner(grad(conc0), grad(conc_)) * dx
+                    + inner(grad(conc0), grad(conc_)) * dx
+#                    + (1./self.Re) * inner(sym(grad(u0)), sym(grad(v))) * dx
+                    + inner(sym(grad(u0)), sym(grad(v))) * dx
                 )
 
 
         return J0
+
+    def get_parameters(self):
+#================================================================================================
+#       Newton/Zarantonello \ LU
+#================================================================================================
+        newton_lu = {
+                "snes_type": "newtonls",
+                "snes_monitor": None,
+                "snes_max_it": 100,
+                "snes_linesearch_type": "basic" if (self.linearisation == "zarantonello") else "basic",
+                "snes_linesearch_maxstep": 1.0,
+                "snes_linesearch_damping": float(self.zdamping) if (self.linearisation == "zarantonello") else 1.0,
+                "snes_linesearch_monitor": None,
+                "snes_converged_reason": None,
+                "ksp_type": "fgmres",
+#                "ksp_monitor_true_residual": None,
+#                "ksp_converged_reason": None,
+                "snes_divtol": "1e14",
+    #            "ksp_view": None,
+    #            "snes_view": None,
+                "ksp_rtol": 1.0e-8,
+                "ksp_atol": 1.0e-8,
+                "snes_rtol": 1.0e-8,
+                "snes_atol": 1.0e-8,
+                "snes_stol": 1.0e-6,
+                "mat_type": "aij",
+                "ksp_max_it": 1,
+                "ksp_convergence_test": "skip",
+                "pc_type": "lu",
+                "pc_factor_mat_solver_type": "mumps",
+                "mat_mumps_icntl_14": 300,#,200,
+                 "mat_mumps_icntl_24": 1,
+                # "mat_mumps_icntl_25": 1,
+                 "mat_mumps_cntl_1": 0.001,
+                 "mat_mumps_cntl_3": 0.0001,
+        }
+#================================================================================================
+#       NRICH_R - Newton/Zarantonello \ LU
+#================================================================================================
+        nrich_R_newtonlu = {
+            "snes_type": "nrichardson",
+            "snes_max_it": 200,
+            "snes_monitor": None,
+            "snes_converged_reason": None,
+        }
+        nrich_R_newtonlu = {**nrich_R_newtonlu, "npc_": copy.deepcopy(newton_lu)}
+        nrich_R_newtonlu["npc_snes_max_it"] = 20 if self.linearisation == "zarantonello" else 3
+        nrich_R_newtonlu["npc_snes_convergence_test"] = "skip"
+        del nrich_R_newtonlu["npc_"]["snes_monitor"]
+        del nrich_R_newtonlu["npc_"]["snes_converged_reason"]
+
+#================================================================================================
+#       Newton/Zarantonello \ LU_R - NRICH
+#================================================================================================
+        newton_lu_R_nrich = copy.deepcopy(newton_lu)
+        newton_lu_R_nrich["npc_snes_type"] = "nrichardson"
+        newton_lu_R_nrich["npc_snes_max_it"] = 5
+
+#================================================================================================
+#       NRICH_R - FAS(GS)
+#================================================================================================
+        nrich_fas_gs = {
+            "snes_type": "nrichardson",
+            "snes_max_it": 200,
+#            "snes_view": None,
+            "snes_monitor": None,
+            "snes_converged_reason": None,
+            "npc_snes_type": "fas",
+            "npc_snes_max_it": 1,
+            "npc_snes_fas_monitor": None,
+            "npc_snes_fas_smoothup": 6,
+            "npc_snes_fas_smoothdown": 6,
+            "npc_fas_levels_snes_type": "ngs",
+            "npc_fas_levels_snes_ngs_atol": 1e-4,
+            "npc_fas_levels_snes_ngs_rtol": 1e-3,
+            "npc_fas_levels_snes_monitor": None,
+            "npc_fas_levels_snes_ngs_sweeps": 3,
+            "npc_fas_levels_convergence_test": "skip",
+#            "npc_fas_levels_snes_max_it": 6,
+#            "npc_fas_coarse_snes_converged_reason": None,
+#            "npc_fas_coarse_snes_linesearch_type": "basic",
+            "npc_fas_coarse_": copy.deepcopy(newton_lu),
+        }
+        nrich_fas_gs["npc_fas_coarse_"]["snes_max_it"] = 10
+        nrich_fas_gs["npc_fas_coarse_"]["snes_atol"] = 1e-4
+        nrich_fas_gs["npc_fas_coarse_"]["snes_rtol"] = 1e-3
+
+#================================================================================================
+#       NGMRES_R - FAS(Newton)
+#================================================================================================
+        ngmres_fas_newton_lu = {
+            "snes_type": "ngmres",
+            "snes_max_it": 200,
+            "snes_monitor": None,
+            "snes_converged_reason": None,
+            "npc_snes_type": "fas",
+            "npc_snes_max_it": 1,
+            "npc_snes_fas_type": "multiplicative",
+            "npc_snes_fas_monitor": None,
+#            "npc_snes_fas_smoothup": 6,
+#            "npc_snes_fas_smoothdown": 6,
+            "npc_fas_levels": copy.deepcopy(newton_lu),
+            "npc_fas_coarse_": copy.deepcopy(newton_lu),
+        }
+        ngmres_fas_newton_lu["npc_fas_levels"]["snes_max_it"] = 8 if self.linearisation == "zarantonello" else 4
+        ngmres_fas_newton_lu["npc_fas_levels"]["snes_convergence_test"] = "skip"
+        ngmres_fas_newton_lu["npc_fas_coarse_"]["snes_max_it"] = 10 if self.linearisation == "zarantonello" else 5
+        ngmres_fas_newton_lu["npc_fas_coarse_"]["snes_convergence_test"] = "skip"
+        del ngmres_fas_newton_lu["npc_fas_coarse_"]["snes_monitor"]
+#        del ngmres_fas_newton_lu["npc_fas_levels"]["snes_monitor"]
+
+
+#================================================================================================
+#       FAS(NGS) * Newton
+#================================================================================================
+        fas_c_newton_lu = {
+            "snes_type": "composite",
+            "snes_composite_type": "multiplicative",
+            "snes_composite_sneses": "fas,newtonls",
+            "snes_converged_reason": None,
+            "snes_monitor": None,
+            "sub_0": {"snes_fas_type": "multiplicative",
+                      "snes_fas_monitor": None,
+                      "snes_fas_smoothup": 6,
+                      "snes_fas_smoothdown": 6,
+                      "fas_levels_snes_type": "ngs",
+                      "fas_levels_snes_ngs_atol": 1e-4,
+                      "fas_levels_snes_ngs_rtol": 1e-3,
+#                      "fas_levels_snes_monitor": None,
+                      "fas_levels_snes_ngs_sweeps": 3,
+                      "fas_levels_snes_convergence_test": "skip",
+                      "fas_levels_snes_max_it": 6,
+                      "fas_coarse_": copy.deepcopy(newton_lu),
+                      },
+            "sub_1": copy.deepcopy(newton_lu),
+                           }
+        fas_c_newton_lu["sub_0"]["snes_max_it"] = 10
+        fas_c_newton_lu["sub_0"]["fas_coarse_"]["snes_max_it"] = 10
+        fas_c_newton_lu["sub_0"]["fas_coarse_"]["snes_atol"] = 1e-4
+        fas_c_newton_lu["sub_0"]["fas_coarse_"]["snes_rtol"] = 1e-3
+
+#================================================================================================
+#       Newton * FAS(NGS)
+#================================================================================================
+        newton_lu_c_fas = {
+            "snes_type": "composite",
+            "snes_composite_type": "multiplicative",
+            "snes_composite_sneses": "newtonls,fas",
+            "snes_converged_reason": None,
+            "snes_monitor": None,
+            "sub_1": {"snes_fas_type": "multiplicative",
+                      "snes_fas_monitor": None,
+                      "snes_fas_smoothup": 6,
+                      "snes_fas_smoothdown": 6,
+                      "fas_levels_snes_type": "ngs",
+                      "fas_levels_snes_ngs_atol": 1e-4,
+                      "fas_levels_snes_ngs_rtol": 1e-3,
+#                      "fas_levels_snes_monitor": None,
+                      "fas_levels_snes_ngs_sweeps": 3,
+                      "fas_levels_snes_convergence_test": "skip",
+                      "fas_levels_snes_max_it": 6,
+                      "fas_coarse_": copy.deepcopy(newton_lu),
+                      },
+            "sub_0": copy.deepcopy(newton_lu),
+                           }
+        newton_lu_c_fas["sub_0"]["snes_max_it"] = 10
+        newton_lu_c_fas["sub_1"]["fas_coarse_"]["snes_max_it"] = 10
+        newton_lu_c_fas["sub_1"]["fas_coarse_"]["snes_atol"] = 1e-4
+        newton_lu_c_fas["sub_1"]["fas_coarse_"]["snes_rtol"] = 1e-3
+#========== Choose one======================================================
+#===========================================================================
+        solvers = {
+            "newton_lu": newton_lu,
+            "nrich_R-newton_lu": nrich_R_newtonlu,
+            "newton_lu_R-nrich": newton_lu_R_nrich,
+            "nrich_fas_gs": nrich_fas_gs,
+            "ngmres_fas_newton_lu": ngmres_fas_newton_lu,
+            "fas_c_newton_lu": fas_c_newton_lu,
+            "newton_lu_c_fas": newton_lu_c_fas,
+        }
+        return solvers[self.solver_type]
 
 class SynovialSVSolver(SynovialSolver):
 

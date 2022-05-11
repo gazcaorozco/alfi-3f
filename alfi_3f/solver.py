@@ -36,7 +36,7 @@ class NonNewtonianSolver(object):
                  rebalance_vertices=False, hierarchy_callback=None, high_accuracy=False, scalar_conv="none",
                  linearisation = "newton", low_accuracy = False, no_convection = False, traceless_stress = True):
 
-        assert solver_type in {"almg", "allu", "lu", "aljacobi", "alamg", "simple"}, "Invalid solver type %s" % solver_type
+#        assert solver_type in {"almg", "allu", "lu", "aljacobi", "alamg", "simple"}, "Invalid solver type %s" % solver_type
         if stabilisation_type_u == "none":
             stabilisation_type_u = None
         if stabilisation_type_t == "none":

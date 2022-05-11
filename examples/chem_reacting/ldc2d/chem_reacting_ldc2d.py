@@ -70,7 +70,7 @@ class ChemicallyReactingLDC(NonNewtonianProblem_Tup):
         return driver
 
     def plaw_exponent(self, c):
-        if self.rheol == "synovial":
+        if self.rheol in ["synovial", "synovial2"]:
             nn = 0.5*(exp(-self.alpha*c) - 1.0)
         elif self.rheol == "power-law":
             nn = (self.alpha-2)/(2.)
@@ -95,9 +95,17 @@ if __name__ == "__main__":
         betas = [1e-4]; beta = Constant(betas[0])
         epss = [0.001]; eps = Constant(epss[0])
         nu_s = [0.5]; nu = Constant(nu_s[0])
-        Pe_s = [100., 1000, 1e5]; Pe = Constant(Pe_s[0])
+        Pe_s = [100.]#, 1000, 1e5]; 
+        Pe = Constant(Pe_s[0])
 #        Pe_s = [1e4]; Pe = Constant(Pe_s[0])#For Kacanov
 #        Pe_s = [500, 1e4]; Pe = Constant(Pe_s[0])#For Newton
+
+    # For the FAS-Zarantonello comparisons...
+        alphas = [2.0]; alpha = Constant(alphas[0]) #Newtonian alpha=0
+        betas = [1e-4]; beta = Constant(betas[0])
+        epss = [0.001]; eps = Constant(epss[0])
+        nu_s = [0.5]; nu = Constant(nu_s[0])
+        Pe_s = [10.]; Pe = Constant(Pe_s[0])
 
     elif args.rheol == "power-law":
         alphas = [1.6]; alpha = Constant(alphas[0]) #Newtonian alpha=2
@@ -141,14 +149,14 @@ if __name__ == "__main__":
         energies.append(energ_)
         print(energ_, float(solver_.alpha))
 
-    if args.rheol in ["power-law", "synovial2"]:
-        solver_.solver.snes.setMonitor(mymonitor)
+#    if args.rheol in ["power-law", "synovial2"]:
+#        solver_.solver.snes.setMonitor(mymonitor)
 
     continuation_params = {"beta": betas, "eps": epss, "nu": nu_s, "alpha": alphas, "Pe": Pe_s}
     results = run_solver(solver_, args, continuation_params)
 
-    if args.rheol in ["power-law", "synovial2"]:
-        print(energies)
+#    if args.rheol in ["power-law", "synovial2"]:
+#        print(energies)
 
     if args.plots:
         k = solver_.z.sub(1).ufl_element().degree()
