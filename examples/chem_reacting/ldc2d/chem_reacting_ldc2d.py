@@ -105,7 +105,7 @@ if __name__ == "__main__":
         betas = [1e-4]; beta = Constant(betas[0])
         epss = [0.001]; eps = Constant(epss[0])
         nu_s = [0.5]; nu = Constant(nu_s[0])
-        Pe_s = [10.]; Pe = Constant(Pe_s[0])
+        Pe_s = [1000.]; Pe = Constant(Pe_s[0])
 
     elif args.rheol == "power-law":
         alphas = [1.6]; alpha = Constant(alphas[0]) #Newtonian alpha=2

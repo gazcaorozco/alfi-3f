@@ -26,7 +26,7 @@ def get_default_parser():
                         choices=["lu", "allu", "almg", "aljacobi", "alamg", "simple",
                                  "newton_lu", "nrich_R-newton_lu", "newton_lu_R-nrich",
                                  "nrich_fas_gs", "ngmres_fas_newton_lu", "fas_c_newton_lu",
-                                 "newton_lu_c_fas"])
+                                 "newton_lu_c_fas", "ngmres_fas_ngs", "zar_ew_vanka", "ngmres_fas_newton_mg"])
     parser.add_argument("--patch", type=str, default="macro",
                         choices=["star", "macro"])
     parser.add_argument("--patch-composition", type=str, default="additive",

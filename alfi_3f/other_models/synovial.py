@@ -83,12 +83,71 @@ class SynovialSolver(ConformingSolver):
 
     def get_parameters(self):
 #================================================================================================
+#       MG + Vanka (linear solver)
+#================================================================================================
+        mg_vanka = {"ksp_type": "cg",
+                    "ksp_monitor_true_residual": None,
+                    "ksp_converged_reason": None,
+                    "ksp_max_it": 100,
+                    "pc_type": "fieldsplit",
+                    "pc_fieldsplit_0_fields": "0",
+                    "pc_fieldsplit_1_fields": "1,2",
+                    "pc_fieldsplit_type": "additive",
+                    "fieldsplit_0_": {
+                        "ksp_type": "preonly",
+                        "pc_type": "mg",
+                        "pc_mg_cycle_type": "v",
+                        "pc_mg_type": "multiplicative",
+                        "mg_levels": {
+                            "ksp_type": "chebyshev",
+                            "ksp_max_it": 3,
+                            "ksp_convergence_test": "skip",
+                            "pc_type": "jacobi",
+                        },
+                    },
+                    "fieldsplit_1_": {
+                        "ksp_type": "preonly",
+                        "pc_type": "mg",
+                        "pc_mg_cycle_type": "v",
+                        "pc_mg_type": "multiplicative",
+                        "mg_levels": {
+                            "ksp_type": "chebyshev",
+                            "ksp_chebyshev_esteig": "0,0,0,0",
+                            "ksp_chebyshev_eigenvalues": "1.5,8",
+                            "ksp_max_it": 3,
+                            "ksp_convergence_test": "skip",
+                            "pc_type": "python",
+                            "pc_python_type": "firedrake.PatchPC",
+                            "patch_pc_patch_save_operators": True,
+                            "patch_pc_patch_partition_of_unity": False,
+                            "patch_pc_patch_sub_mat_type":
+                            "seqdense", "patch_pc_patch_construct_dim": 0,
+                            "patch_pc_patch_vanka_dim": 0,
+                            "patch_pc_patch_construct_type": "vanka",
+                            "patch_pc_patch_exclude_subspaces": 1,
+                            "patch_pc_patch_local_type": "additive",
+                            "patch_pc_patch_precompute_element_tensors": True,
+                            "patch_pc_patch_symmetrise_sweep": False,
+                            "patch_sub_ksp_type": "preonly",
+                            "patch_sub_pc_type": "lu",
+                            "patch_sub_pc_factor_shift_type": "nonzero",
+                        },
+                        "mg_coarse" : {
+                            "mg_coarse_ksp_type": "richardson",
+                            "mg_coarse_pc_type": "python",
+                            "mg_coarse_pc_python_type": "firedrake.AssembledPC",
+                            "mg_coarse_assembled_pc_type": "lu",
+                            "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps",
+                        }
+                    },
+        }
+#================================================================================================
 #       Newton/Zarantonello \ LU
 #================================================================================================
         newton_lu = {
                 "snes_type": "newtonls",
                 "snes_monitor": None,
-                "snes_max_it": 100,
+                "snes_max_it": 1000,
                 "snes_linesearch_type": "basic" if (self.linearisation == "zarantonello") else "basic",
                 "snes_linesearch_maxstep": 1.0,
                 "snes_linesearch_damping": float(self.zdamping) if (self.linearisation == "zarantonello") else 1.0,
@@ -96,15 +155,11 @@ class SynovialSolver(ConformingSolver):
                 "snes_converged_reason": None,
                 "ksp_type": "fgmres",
 #                "ksp_monitor_true_residual": None,
-#                "ksp_converged_reason": None,
                 "snes_divtol": "1e14",
-    #            "ksp_view": None,
     #            "snes_view": None,
-                "ksp_rtol": 1.0e-8,
-                "ksp_atol": 1.0e-8,
                 "snes_rtol": 1.0e-8,
                 "snes_atol": 1.0e-8,
-                "snes_stol": 1.0e-6,
+                "snes_stol": 0,
                 "mat_type": "aij",
                 "ksp_max_it": 1,
                 "ksp_convergence_test": "skip",
@@ -117,6 +172,48 @@ class SynovialSolver(ConformingSolver):
                  "mat_mumps_cntl_3": 0.0001,
         }
 #================================================================================================
+#       Zarantonello + EW \ Vanka
+#================================================================================================
+        zar_ew_vanka = {
+                "mat_type": "aij",
+                "snes_type": "newtonls",
+                "snes_monitor": None,
+                "snes_max_it": 1000,
+                "snes_linesearch_type": "basic",
+                "snes_linesearch_maxstep": 1.0,
+                "snes_linesearch_damping": float(self.zdamping) if (self.linearisation == "zarantonello") else 1.0,
+                "snes_linesearch_monitor": None,
+                "snes_converged_reason": None,
+                "snes_max_linear_solve_fail": 10,
+                "snes_ksp_ew": None,
+                "snes_force_iteration": 1,
+                "snes_divtol": "1e14",
+    #            "snes_view": None,
+                "snes_rtol": 1.0e-8, #1.0e-7
+                "snes_atol": 1.0e-8, #1.0e-7
+                "snes_stol": 0,
+        }
+        zar_ew_vanka = {**zar_ew_vanka, **mg_vanka}
+#================================================================================================
+#       Zarantonello \ Vanka
+#================================================================================================
+        zar_vanka = {
+                "mat_type": "aij",
+                "snes_type": "newtonls",
+                "snes_monitor": None,
+                "snes_max_it": 1000,
+                "snes_linesearch_type": "basic",
+                "snes_linesearch_maxstep": 1.0,
+                "snes_linesearch_damping": float(self.zdamping) if (self.linearisation == "zarantonello") else 1.0,
+                "snes_linesearch_monitor": None,
+                "snes_converged_reason": None,
+    #            "snes_view": None,
+                "snes_rtol": 1.0e-8, #1.0e-7
+                "snes_atol": 1.0e-8, #1.0e-7
+                "snes_stol": 0,
+        }
+        zar_vanka = {**zar_vanka, **mg_vanka}
+#================================================================================================
 #       NRICH_R - Newton/Zarantonello \ LU
 #================================================================================================
         nrich_R_newtonlu = {
@@ -124,6 +221,9 @@ class SynovialSolver(ConformingSolver):
             "snes_max_it": 200,
             "snes_monitor": None,
             "snes_converged_reason": None,
+            "snes_rtol": 1.0e-8,
+            "snes_atol": 1.0e-8,
+            "snes_stol": 0,
         }
         nrich_R_newtonlu = {**nrich_R_newtonlu, "npc_": copy.deepcopy(newton_lu)}
         nrich_R_newtonlu["npc_snes_max_it"] = 20 if self.linearisation == "zarantonello" else 3
@@ -147,6 +247,9 @@ class SynovialSolver(ConformingSolver):
 #            "snes_view": None,
             "snes_monitor": None,
             "snes_converged_reason": None,
+            "snes_rtol": 1.0e-8,
+            "snes_atol": 1.0e-8,
+            "snes_stol": 0,
             "npc_snes_type": "fas",
             "npc_snes_max_it": 1,
             "npc_snes_fas_monitor": None,
@@ -168,29 +271,83 @@ class SynovialSolver(ConformingSolver):
         nrich_fas_gs["npc_fas_coarse_"]["snes_rtol"] = 1e-3
 
 #================================================================================================
-#       NGMRES_R - FAS(Newton)
+#       NGMRES_R - FAS(Newton \ LU)
 #================================================================================================
         ngmres_fas_newton_lu = {
             "snes_type": "ngmres",
             "snes_max_it": 200,
             "snes_monitor": None,
             "snes_converged_reason": None,
+            "snes_rtol": 1.0e-8,
+            "snes_atol": 1.0e-8,
+            "snes_stol": 0,
             "npc_snes_type": "fas",
             "npc_snes_max_it": 1,
             "npc_snes_fas_type": "multiplicative",
             "npc_snes_fas_monitor": None,
-#            "npc_snes_fas_smoothup": 6,
-#            "npc_snes_fas_smoothdown": 6,
+            "npc_snes_fas_smoothup": 6,
+            "npc_snes_fas_smoothdown": 6,
             "npc_fas_levels": copy.deepcopy(newton_lu),
-            "npc_fas_coarse_": copy.deepcopy(newton_lu),
+#            "npc_fas_coarse_": copy.deepcopy(newton_lu),
+            "npc_fas_coarse_snes_linesearch_type": "basic",
         }
-        ngmres_fas_newton_lu["npc_fas_levels"]["snes_max_it"] = 8 if self.linearisation == "zarantonello" else 4
-        ngmres_fas_newton_lu["npc_fas_levels"]["snes_convergence_test"] = "skip"
-        ngmres_fas_newton_lu["npc_fas_coarse_"]["snes_max_it"] = 10 if self.linearisation == "zarantonello" else 5
-        ngmres_fas_newton_lu["npc_fas_coarse_"]["snes_convergence_test"] = "skip"
-        del ngmres_fas_newton_lu["npc_fas_coarse_"]["snes_monitor"]
-#        del ngmres_fas_newton_lu["npc_fas_levels"]["snes_monitor"]
+        ngmres_fas_newton_lu["npc_fas_levels"]["snes_max_it"] = 4 if self.linearisation == "zarantonello" else 6
+#        ngmres_fas_newton_lu["npc_fas_levels"]["snes_convergence_test"] = "skip"
+#        ngmres_fas_newton_lu["npc_fas_coarse_"]["snes_max_it"] = 10 if self.linearisation == "zarantonello" else 5
+#        ngmres_fas_newton_lu["npc_fas_coarse_"]["snes_convergence_test"] = "skip"
+#        del ngmres_fas_newton_lu["npc_fas_coarse_"]["snes_monitor"]
+##        del ngmres_fas_newton_lu["npc_fas_levels"]["snes_monitor"]
 
+#================================================================================================
+#       NGMRES_R - FAS(Newton \ Vanka) 
+#================================================================================================
+        ngmres_fas_newton_mg = {
+            "snes_type": "ngmres",
+            "snes_max_it": 200,
+            "snes_monitor": None,
+            "snes_converged_reason": None,
+            "snes_rtol": 1.0e-8,
+            "snes_atol": 1.0e-8,
+            "snes_stol": 0,
+            "npc_snes_type": "fas",
+            "npc_snes_max_it": 1,
+            "npc_snes_fas_type": "multiplicative",
+            "npc_snes_fas_monitor": None,
+            "npc_snes_fas_smoothup": 6,
+            "npc_snes_fas_smoothdown": 6,
+            "npc_fas_levels": copy.deepcopy(zar_ew_vanka),
+#            "npc_fas_coarse_": copy.deepcopy(newton_lu),
+            "npc_fas_coarse_snes_linesearch_type": "basic",
+        }
+        ngmres_fas_newton_lu["npc_fas_levels"]["snes_max_it"] = 4
+#        ngmres_fas_newton_lu["npc_fas_levels"]["snes_convergence_test"] = "skip"
+
+#================================================================================================
+#       NGMRES_R - FAS(NGS)
+#================================================================================================
+        ngmres_fas_ngs = {
+            "snes_type": "ngmres",
+            "snes_max_it": 200,
+            "snes_monitor": None,
+            "snes_converged_reason": None,
+            "snes_rtol": 1.0e-8,
+            "snes_atol": 1.0e-8,
+            "snes_stol": 0,
+            "npc_snes_type": "fas",
+            "npc_snes_max_it": 1,
+            "npc_snes_fas_type": "multiplicative",
+            "npc_snes_fas_monitor": None,
+            "npc_snes_fas_smoothup": 6,
+            "npc_snes_fas_smoothdown": 6,
+            "npc_fas_levels_snes_type": "ngs",
+#            "npc_fas_levels_snes_ngs_sweeps": 3,
+            "npc_fas_levels_snes_ngs_max_it": 6,
+            "npc_fas_levels_snes_ngs_atol": 1e-4,
+            "npc_fas_levels_snes_ngs_rtol": 1e-3,
+            "npc_fas_levels_snes_monitor": None,
+            "npc_fas_levels_convergence_test": "skip",
+            "npc_fas_coarse_snes_linesearch_type": "basic",
+        }
 
 #================================================================================================
 #       FAS(NGS) * Newton
@@ -201,6 +358,9 @@ class SynovialSolver(ConformingSolver):
             "snes_composite_sneses": "fas,newtonls",
             "snes_converged_reason": None,
             "snes_monitor": None,
+            "snes_rtol": 1.0e-8,
+            "snes_atol": 1.0e-8,
+            "snes_stol": 0,
             "sub_0": {"snes_fas_type": "multiplicative",
                       "snes_fas_monitor": None,
                       "snes_fas_smoothup": 6,
@@ -253,10 +413,13 @@ class SynovialSolver(ConformingSolver):
 #===========================================================================
         solvers = {
             "newton_lu": newton_lu,
+            "zar_ew_vanka": zar_ew_vanka,
             "nrich_R-newton_lu": nrich_R_newtonlu,
             "newton_lu_R-nrich": newton_lu_R_nrich,
             "nrich_fas_gs": nrich_fas_gs,
+            "ngmres_fas_ngs": ngmres_fas_ngs,
             "ngmres_fas_newton_lu": ngmres_fas_newton_lu,
+            "ngmres_fas_newton_mg": ngmres_fas_newton_mg,
             "fas_c_newton_lu": fas_c_newton_lu,
             "newton_lu_c_fas": newton_lu_c_fas,
         }
