@@ -178,7 +178,7 @@ class SynovialSolver(ConformingSolver):
                 "mat_type": "aij",
                 "snes_type": "newtonls",
                 "snes_monitor": None,
-                "snes_max_it": 1000,
+                "snes_max_it": 10000,
                 "snes_linesearch_type": "basic",
                 "snes_linesearch_maxstep": 1.0,
                 "snes_linesearch_damping": float(self.zdamping) if (self.linearisation == "zarantonello") else 1.0,
